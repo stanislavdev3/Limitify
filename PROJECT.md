@@ -1,6 +1,6 @@
 # Limitify
 
-Limitify is a native macOS menu bar application that shows usage limits for AI developer tools. The first integration is Codex; the architecture should allow other services to be added without redesigning the application.
+Limitify is a native macOS menu bar application that shows usage limits for AI developer tools. The first integrations are Codex and Claude Code; the architecture allows other services to be added without redesigning the application.
 
 This document is the initial product and technical specification. Decisions that are not settled yet are explicitly marked as open questions.
 
@@ -18,7 +18,7 @@ Limitify should be:
 
 ## MVP scope
 
-The first release supports Codex and displays:
+The first release supports Codex and Claude Code and displays:
 
 - remaining or used percentage in the menu bar;
 - every available limit window, such as a five-hour or weekly window;
@@ -36,7 +36,7 @@ The first release does not include:
 - historical charts or usage forecasting;
 - payments or subscription management;
 - automatic updates;
-- integrations other than Codex.
+- integrations other than Codex and Claude Code.
 
 ## Proposed interface
 
@@ -284,7 +284,8 @@ The following decisions are fixed for the MVP:
 5. When several limits exist, the menu bar shows the most constrained window: the one with the lowest remaining percentage.
 6. The MVP uses local Codex data. It does not promise live usage while Codex is not producing local updates.
 7. Data older than 10 minutes remains visible but is marked as stale.
-8. Initial distribution is direct using a signed and notarized DMG, not the Mac App Store.
+8. The popover selects whether the Codex or Claude logo and usage appear in the menu bar.
+9. Initial distribution is direct using a signed and notarized DMG, not the Mac App Store.
 
 ## First development task
 
@@ -292,7 +293,7 @@ Complete Milestone 0 as a short technical spike. The first code should be a synt
 
 ## Implementation status
 
-As of 2026-07-26, Milestones 0–3 and the implementation/build portion of
+As of 2026-07-26, Milestones 0–3, the Claude Code integration, and the implementation/build portion of
 Milestone 4 are complete. A universal ad-hoc signed app and verified DMG are
 produced locally. Developer ID signing and Apple notarization remain pending
 because no signing identity or notary credential is installed on the development

@@ -19,10 +19,18 @@ struct UsagePopoverView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack {
             Text("Limitify")
                 .font(.headline)
             Spacer()
+            Picker("Menu bar service", selection: $settings.displayProvider) {
+                ForEach(DisplayProvider.allCases) { provider in
+                    Text(provider.displayName).tag(provider)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .accessibilityLabel("Service shown in the menu bar")
             if let plan = store.usage?.accountLabel {
                 Text(planLabel(plan))
                     .font(.subheadline)
@@ -33,11 +41,11 @@ struct UsagePopoverView: View {
 
     @ViewBuilder
     private var content: some View {
-        if !settings.codexEnabled {
+        if !store.selectedProviderEnabled {
             ContentUnavailableView(
-                "Codex is disabled",
+                "\(settings.displayProvider.displayName) is disabled",
                 systemImage: "pause.circle",
-                description: Text("Enable Codex in Settings to show usage limits.")
+                description: Text("Enable \(settings.displayProvider.displayName) in Settings to show usage limits.")
             )
         } else if let usage = store.usage {
             VStack(alignment: .leading, spacing: 18) {
@@ -45,7 +53,7 @@ struct UsagePopoverView: View {
                     Label("Showing stale data", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
-                        .accessibilityLabel("Warning: showing stale Codex usage data")
+                        .accessibilityLabel("Warning: showing stale \(settings.displayProvider.displayName) usage data")
                 }
 
                 ForEach(usage.limits, id: \.id) { limit in
@@ -61,7 +69,7 @@ struct UsagePopoverView: View {
         } else if store.isRefreshing {
             HStack(spacing: 10) {
                 ProgressView().controlSize(.small)
-                Text("Loading Codex usage…")
+                Text("Loading \(settings.displayProvider.displayName) usage…")
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, minHeight: 100)
@@ -91,9 +99,9 @@ struct UsagePopoverView: View {
                     }
                 }
                 .buttonStyle(.link)
-                .disabled(store.isRefreshing || !settings.codexEnabled)
+                .disabled(store.isRefreshing || !store.selectedProviderEnabled)
                 .keyboardShortcut("r", modifiers: .command)
-                .accessibilityLabel("Refresh Codex usage")
+                .accessibilityLabel("Refresh \(settings.displayProvider.displayName) usage")
             }
 
             HStack {
@@ -122,19 +130,20 @@ struct UsagePopoverView: View {
     }
 
     private func errorTitle(_ failure: UsageProviderFailure?) -> String {
+        let provider = settings.displayProvider.displayName
         switch failure {
         case .providerNotInstalled:
-            return "Codex is not installed"
+            return "\(provider) is not installed"
         case .dataDirectoryMissing:
-            return "Codex data not found"
+            return "\(provider) data not found"
         case .noUsageEvent:
             return "No usage data yet"
         case .accessDenied:
             return "Access denied"
         case .malformedData:
-            return "Codex data is incomplete"
+            return "\(provider) data is incomplete"
         case .unsupportedData:
-            return "Unsupported Codex data"
+            return "Unsupported \(provider) data"
         default:
             return "Usage unavailable"
         }
@@ -156,6 +165,27 @@ struct UsagePopoverView: View {
     }
 
     private func failureMessage(_ failure: UsageProviderFailure?) -> String {
+        if settings.displayProvider == .claude {
+            switch failure {
+            case .providerNotInstalled:
+                return "Install Claude Code, then connect it in Settings."
+            case .noUsageEvent:
+                return "Connect Claude Code in Settings and send one message to update its limits."
+            case .accessDenied:
+                return "Limitify cannot read its local Claude usage cache."
+            case .malformedData:
+                return "Claude returned incomplete rate-limit data. Send another message, then refresh."
+            case .unavailable:
+                return "Claude usage could not be refreshed. The previous value is retained."
+            case .unsupportedData:
+                return "This Claude Code version returned an unsupported usage format."
+            case .unknown:
+                return "An unexpected local Claude provider error occurred."
+            case .dataDirectoryMissing, nil:
+                return "Connect Claude Code in Settings to collect local usage limits."
+            }
+        }
+
         switch failure {
         case .providerNotInstalled:
             return "Install Codex or choose its local sessions directory in Settings."

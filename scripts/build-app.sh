@@ -35,6 +35,11 @@ cp "$project_dir/Resources/Info.plist" "$contents/Info.plist"
 cp "$project_dir/Resources/Limitify.icns" "$contents/Resources/Limitify.icns"
 cp "$project_dir/Sources/LimitifyApp/Resources/OpenAIBlossom.svg" \
     "$contents/Resources/OpenAIBlossom.svg"
+cp "$project_dir/Sources/LimitifyApp/Resources/Claude.svg" \
+    "$contents/Resources/Claude.svg"
+cp "$project_dir/Sources/LimitifyApp/Resources/LimitifyClaudeStatusLine.sh" \
+    "$contents/Resources/LimitifyClaudeStatusLine.sh"
+chmod 755 "$contents/Resources/LimitifyClaudeStatusLine.sh"
 
 codesign --force --sign "$sign_identity" --options runtime --timestamp=none "$app_bundle"
 codesign --verify --deep --strict --verbose=2 "$app_bundle"

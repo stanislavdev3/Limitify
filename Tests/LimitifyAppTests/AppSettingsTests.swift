@@ -13,6 +13,8 @@ struct AppSettingsTests {
         #expect(settings.refreshInterval == 60)
         #expect(settings.staleThreshold == 600)
         #expect(settings.codexEnabled)
+        #expect(settings.claudeEnabled)
+        #expect(settings.displayProvider == .codex)
         #expect(settings.codexSessionsPath.hasSuffix("/.codex/sessions"))
     }
 
@@ -23,12 +25,16 @@ struct AppSettingsTests {
         settings.refreshInterval = 300
         settings.staleThreshold = 1_800
         settings.codexEnabled = false
+        settings.claudeEnabled = false
+        settings.displayProvider = .claude
         settings.codexSessionsPath = "/tmp/synthetic-codex/sessions"
 
         let restored = AppSettings(defaults: defaults)
         #expect(restored.refreshInterval == 300)
         #expect(restored.staleThreshold == 1_800)
         #expect(!restored.codexEnabled)
+        #expect(!restored.claudeEnabled)
+        #expect(restored.displayProvider == .claude)
         #expect(restored.codexSessionsPath == "/tmp/synthetic-codex/sessions")
     }
 

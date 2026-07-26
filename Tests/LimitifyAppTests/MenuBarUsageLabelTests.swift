@@ -24,4 +24,11 @@ struct MenuBarUsageLabelTests {
         #expect(image.isTemplate)
         #expect(image.size == OpenAIStatusIcon.pointSize)
     }
+
+    @Test("Claude marker loads at menu-bar size")
+    func claudeMarker() throws {
+        let image = try #require(ClaudeStatusIcon.image)
+        #expect(image.isTemplate)
+        #expect(image.size == ClaudeStatusIcon.pointSize)
+    }
 }

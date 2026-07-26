@@ -6,6 +6,7 @@ struct LimitifyApp: App {
     @StateObject private var settings: AppSettings
     @StateObject private var store: LimitifyUsageStore
     @StateObject private var launchAtLogin = LaunchAtLoginManager()
+    @StateObject private var claudeInstaller = ClaudeStatusLineInstaller()
 
     init() {
         let settings = AppSettings()
@@ -31,7 +32,7 @@ struct LimitifyApp: App {
                     store.refresh()
                 }
         } label: {
-            MenuBarUsageLabel(store: store, staleThreshold: settings.staleThreshold)
+            MenuBarUsageLabel(settings: settings, store: store)
                 .task { store.start() }
         }
         .menuBarExtraStyle(.window)
@@ -40,7 +41,8 @@ struct LimitifyApp: App {
             SettingsView(
                 settings: settings,
                 store: store,
-                launchAtLogin: launchAtLogin
+                launchAtLogin: launchAtLogin,
+                claudeInstaller: claudeInstaller
             )
         }
     }

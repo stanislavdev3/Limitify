@@ -2,6 +2,15 @@ import Combine
 import Foundation
 import LimitifyCore
 
+enum DisplayProvider: String, CaseIterable, Identifiable {
+    case codex
+    case claude
+
+    var id: String { rawValue }
+    var providerID: ProviderID { self == .codex ? .codex : .claude }
+    var displayName: String { self == .codex ? "Codex" : "Claude" }
+}
+
 @MainActor
 final class AppSettings: ObservableObject {
     static let refreshIntervalOptions: [TimeInterval] = [30, 60, 120, 300, 600]
@@ -23,6 +32,14 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(codexEnabled, forKey: Keys.codexEnabled) }
     }
 
+    @Published var claudeEnabled: Bool {
+        didSet { defaults.set(claudeEnabled, forKey: Keys.claudeEnabled) }
+    }
+
+    @Published var displayProvider: DisplayProvider {
+        didSet { defaults.set(displayProvider.rawValue, forKey: Keys.displayProvider) }
+    }
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -32,6 +49,8 @@ final class AppSettings: ObservableObject {
             Keys.staleThreshold: 600.0,
             Keys.codexSessionsPath: CodexDataLocation.defaultSessionsDirectory().path,
             Keys.codexEnabled: true,
+            Keys.claudeEnabled: true,
+            Keys.displayProvider: DisplayProvider.codex.rawValue,
         ])
 
         refreshInterval = Self.validated(
@@ -47,6 +66,10 @@ final class AppSettings: ObservableObject {
         codexSessionsPath = defaults.string(forKey: Keys.codexSessionsPath)
             ?? CodexDataLocation.defaultSessionsDirectory().path
         codexEnabled = defaults.bool(forKey: Keys.codexEnabled)
+        claudeEnabled = defaults.bool(forKey: Keys.claudeEnabled)
+        displayProvider = DisplayProvider(
+            rawValue: defaults.string(forKey: Keys.displayProvider) ?? ""
+        ) ?? .codex
     }
 
     func resetCodexSessionsPath() {
@@ -71,5 +94,7 @@ final class AppSettings: ObservableObject {
         static let staleThreshold = "staleThreshold"
         static let codexSessionsPath = "codexSessionsPath"
         static let codexEnabled = "codexEnabled"
+        static let claudeEnabled = "claudeEnabled"
+        static let displayProvider = "displayProvider"
     }
 }

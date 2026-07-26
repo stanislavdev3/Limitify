@@ -117,6 +117,14 @@ public actor UsageRefreshCoordinator {
         case CodexAppServerError.malformedResponse, CodexAppServerError.invalidUsageWindow,
              CodexAppServerError.noUsageWindows, CodexAppServerError.rpcError:
             return .unsupportedData
+        case ClaudeUsageSourceError.providerNotInstalled:
+            return .providerNotInstalled
+        case ClaudeUsageSourceError.noUsageEvent:
+            return .noUsageEvent
+        case ClaudeUsageSourceError.accessDenied:
+            return .accessDenied
+        case ClaudeUsageSourceError.malformedData:
+            return .malformedData
         default:
             return .unknown
         }

@@ -10,11 +10,13 @@ public struct ProviderID: RawRepresentable, Hashable, Codable, Sendable {
 
 public extension ProviderID {
     static let codex = ProviderID(rawValue: "codex")
+    static let claude = ProviderID(rawValue: "claude")
 }
 
 public enum UsageSourceKind: String, Codable, Sendable {
     case appServer
     case sessionJSONL
+    case statusLine
 }
 
 public enum UsageSourceFreshness: String, Codable, Sendable {

@@ -9,12 +9,15 @@ Date: 2026-07-26
 - Native macOS 14 menu bar-only SwiftUI application.
 - Compact remaining-allowance bar and percentage using the same value.
 - Most-constrained-window selection.
-- Popover with all Codex limit buckets/windows, reset times, plan, refresh time,
+- Popover selection of Codex or Claude for the menu-bar logo, bar, and percentage.
+- Popover with all selected-provider limit buckets/windows, reset times, plan, refresh time,
   stale warning, and manual refresh.
 - Loading, unavailable, provider-not-installed, missing-directory, no-event,
   malformed-data, unsupported-data, access-denied, and transient error states.
 - Preferred Codex app-server source with bounded stdio protocol handling.
 - Bounded local JSONL fallback that reads only projected rate-limit fields.
+- Claude Code status-line collector with 5-hour and weekly limits, private local
+  cache, and preservation/restoration of an existing status-line command.
 - Automatic refresh, concurrent refresh coalescing, last-success retention,
   popover refresh, and wake/clock-change refresh.
 - Refresh/stale/provider/path settings and launch-at-login integration.
@@ -26,7 +29,7 @@ Date: 2026-07-26
 
 ## Verification
 
-- 31 automated tests pass on macOS.
+- 36 automated tests pass on macOS.
 - Release app passes `codesign --verify --deep --strict`.
 - Release executable is a universal Mach-O containing `x86_64` and `arm64`.
 - `Info.plist` passes `plutil -lint`.
@@ -37,7 +40,7 @@ Current local artifact:
 
 ```text
 dist/Limitify-0.1.0.dmg
-SHA-256 ccbecbb3f147e20010f92d74de668093fc86157be3d08f4ab9aab883e2d2bef7
+SHA-256 9951d8c4b850ae818afb5c480ab2c4ccdb0bec48885333c023cb343dc80433ad
 ```
 
 ## External release requirement

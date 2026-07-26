@@ -3,8 +3,8 @@ import LimitifyCore
 import SwiftUI
 
 struct MenuBarUsageLabel: View {
+    @ObservedObject var settings: AppSettings
     @ObservedObject var store: LimitifyUsageStore
-    let staleThreshold: TimeInterval
 
     var body: some View {
         if let limit = store.constrainedLimit {
@@ -15,7 +15,7 @@ struct MenuBarUsageLabel: View {
                     .lineLimit(1)
                     .fixedSize()
             } icon: {
-                OpenAIStatusIcon()
+                ProviderStatusIcon(provider: settings.displayProvider)
             }
             .labelStyle(.titleAndIcon)
             .accessibilityElement(children: .ignore)
@@ -88,6 +88,56 @@ struct OpenAIStatusIcon: View {
             Text("OAI")
                 .font(.system(size: 7, weight: .bold, design: .rounded))
         }
+    }
+}
+
+struct ClaudeStatusIcon: View {
+    static let pointSize = NSSize(width: 14, height: 14)
+    static let image = ProviderIconImage.load(resource: "Claude", pointSize: pointSize)
+
+    var body: some View {
+        if let image = Self.image {
+            Image(nsImage: image)
+                .renderingMode(.template)
+                .frame(width: 14, height: 14)
+        } else {
+            Text("C")
+                .font(.system(size: 8, weight: .bold, design: .rounded))
+        }
+    }
+}
+
+struct ProviderStatusIcon: View {
+    let provider: DisplayProvider
+
+    @ViewBuilder
+    var body: some View {
+        switch provider {
+        case .codex: OpenAIStatusIcon()
+        case .claude: ClaudeStatusIcon()
+        }
+    }
+}
+
+private enum ProviderIconImage {
+    static func load(resource: String, pointSize: NSSize) -> NSImage? {
+        let packagedURL = Bundle.main.url(forResource: resource, withExtension: "svg")
+        let resourceURL = Bundle.module.url(forResource: resource, withExtension: "svg")
+        guard let url = packagedURL ?? resourceURL,
+              let source = NSImage(contentsOf: url)
+        else { return nil }
+
+        let image = NSImage(size: pointSize, flipped: false) { rect in
+            source.draw(
+                in: rect,
+                from: NSRect(origin: .zero, size: source.size),
+                operation: .sourceOver,
+                fraction: 1
+            )
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 }
 

@@ -6,6 +6,8 @@
 2. Drag Limitify to Applications.
 3. Start Limitify. It appears only in the menu bar and has no Dock icon.
 4. Use Codex once if Limitify reports that no usage event has been observed.
+5. For Claude, open Settings, enable Claude, and choose **Connect Claude Code**.
+   Send one Claude Code message so its status-line payload contains rate limits.
 
 The locally produced development DMG is ad-hoc signed until Developer ID
 credentials are supplied. If Gatekeeper blocks that build, Control-click the app
@@ -37,6 +39,17 @@ then choose Refresh in Limitify.
 
 Choose a readable sessions directory in Settings. Limitify is distributed
 outside the Mac App Store and does not request Full Disk Access.
+
+### Claude Code is not connected
+
+Claude Code must be installed locally. Open Limitify Settings and choose
+**Connect Claude Code**. Limitify adds a local collector to Claude's official
+status-line configuration. If a custom status line already exists, its command
+continues to receive the original input and its output is preserved.
+
+Claude exposes subscription limits after the first API response in a session.
+Send one Claude Code message, then choose Refresh in Limitify. Disconnecting in
+Settings restores the previous status-line command.
 
 ### Launch at login needs approval
 

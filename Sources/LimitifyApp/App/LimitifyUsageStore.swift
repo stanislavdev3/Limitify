@@ -4,7 +4,7 @@ import LimitifyCore
 
 @MainActor
 final class LimitifyUsageStore: ObservableObject {
-    @Published private(set) var state = ProviderRefreshState()
+    @Published private(set) var states: [ProviderID: ProviderRefreshState] = [:]
     @Published private(set) var isRefreshing = false
 
     private let settings: AppSettings
@@ -41,7 +41,7 @@ final class LimitifyUsageStore: ObservableObject {
 
     func refreshIfNeeded() {
         applyCurrentSettings()
-        guard settings.codexEnabled else { return }
+        guard settings.codexEnabled || settings.claudeEnabled else { return }
         guard let lastAttempt = state.lastAttemptAt else {
             refresh()
             return
@@ -62,6 +62,21 @@ final class LimitifyUsageStore: ObservableObject {
         state.usage
     }
 
+    var state: ProviderRefreshState {
+        state(for: settings.displayProvider.providerID)
+    }
+
+    func state(for providerID: ProviderID) -> ProviderRefreshState {
+        states[providerID] ?? ProviderRefreshState()
+    }
+
+    var selectedProviderEnabled: Bool {
+        switch settings.displayProvider {
+        case .codex: settings.codexEnabled
+        case .claude: settings.claudeEnabled
+        }
+    }
+
     var isStale: Bool {
         guard let usage else { return false }
         return UsagePolicy.isStale(usage, threshold: settings.staleThreshold)
@@ -74,43 +89,52 @@ final class LimitifyUsageStore: ObservableObject {
     private func refreshNow() async {
         guard !isRefreshing else { return }
         applyCurrentSettings()
-        guard settings.codexEnabled, let coordinator else {
-            state = ProviderRefreshState()
+        guard settings.codexEnabled || settings.claudeEnabled, let coordinator else {
+            states = [:]
             return
         }
 
         isRefreshing = true
-        let states = await coordinator.refresh()
-        state = states[.codex] ?? ProviderRefreshState(failure: .unknown)
+        states = await coordinator.refresh()
         isRefreshing = false
     }
 
     @discardableResult
     private func applyCurrentSettings() -> Bool {
         let configuration = ProviderConfiguration(
-            enabled: settings.codexEnabled,
-            sessionsURL: settings.expandedCodexSessionsURL
+            codexEnabled: settings.codexEnabled,
+            codexSessionsURL: settings.expandedCodexSessionsURL,
+            claudeEnabled: settings.claudeEnabled,
+            claudeCacheURL: ClaudeDataLocation.defaultCacheFile()
         )
         guard configuration != appliedConfiguration else { return false }
 
         appliedConfiguration = configuration
-        guard configuration.enabled else {
+        guard configuration.codexEnabled || configuration.claudeEnabled else {
             coordinator = nil
-            state = ProviderRefreshState()
+            states = [:]
             return true
         }
 
-        let fallback = CodexSessionJSONLSource(sessionsDirectory: configuration.sessionsURL)
-        let preferred = CodexExecutableLocator.locate().map {
-            CodexAppServerSource(executableURL: $0) as any UsageProvider
+        var providers: [any UsageProvider] = []
+        if configuration.codexEnabled {
+            let fallback = CodexSessionJSONLSource(sessionsDirectory: configuration.codexSessionsURL)
+            let preferred = CodexExecutableLocator.locate().map {
+                CodexAppServerSource(executableURL: $0) as any UsageProvider
+            }
+            providers.append(CodexUsageProvider(preferred: preferred, fallback: fallback))
         }
-        let provider = CodexUsageProvider(preferred: preferred, fallback: fallback)
-        coordinator = UsageRefreshCoordinator(providers: [provider])
+        if configuration.claudeEnabled {
+            providers.append(ClaudeUsageProvider(cacheFile: configuration.claudeCacheURL))
+        }
+        coordinator = UsageRefreshCoordinator(providers: providers)
         return true
     }
 }
 
 private struct ProviderConfiguration: Equatable {
-    let enabled: Bool
-    let sessionsURL: URL
+    let codexEnabled: Bool
+    let codexSessionsURL: URL
+    let claudeEnabled: Bool
+    let claudeCacheURL: URL
 }

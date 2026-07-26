@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: LimitifyUsageStore
     @ObservedObject var launchAtLogin: LaunchAtLoginManager
+    @ObservedObject var claudeInstaller: ClaudeStatusLineInstaller
 
     var body: some View {
         Form {
@@ -46,6 +47,32 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("Claude") {
+                Toggle("Enable Claude", isOn: $settings.claudeEnabled)
+
+                HStack {
+                    Text(claudeConnectionText)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if claudeInstaller.status == .connected {
+                        Button("Disconnect") {
+                            claudeInstaller.disconnect()
+                            store.refresh()
+                        }
+                    } else {
+                        Button("Connect Claude Code") {
+                            claudeInstaller.connect()
+                            store.refresh()
+                        }
+                        .disabled(claudeInstaller.status == .notInstalled || !settings.claudeEnabled)
+                    }
+                }
+
+                Text("Claude Code sends only its 5-hour and weekly rate-limit fields to a local Limitify cache. Existing Claude status-line output is preserved.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("System") {
                 Toggle("Launch at login", isOn: Binding(
                     get: { launchAtLogin.isEnabled },
@@ -66,10 +93,14 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding(12)
-        .frame(width: 500, height: 430)
+        .frame(width: 500, height: 560)
         .onChange(of: settings.codexEnabled) { _, _ in store.settingsDidChange() }
+        .onChange(of: settings.claudeEnabled) { _, _ in store.settingsDidChange() }
         .onChange(of: settings.refreshInterval) { _, _ in store.settingsDidChange() }
-        .onAppear { launchAtLogin.refreshStatus() }
+        .onAppear {
+            launchAtLogin.refreshStatus()
+            claudeInstaller.refreshStatus()
+        }
     }
 
     private func chooseSessionsDirectory() {
@@ -97,6 +128,15 @@ struct SettingsView: View {
         case 1_800: return "30 minutes"
         case 3_600: return "1 hour"
         default: return "\(Int(interval)) seconds"
+        }
+    }
+
+    private var claudeConnectionText: String {
+        switch claudeInstaller.status {
+        case .notInstalled: "Claude Code is not installed"
+        case .ready: "Ready to connect"
+        case .connected: "Connected"
+        case let .failed(message): "Connection failed: \(message)"
         }
     }
 }

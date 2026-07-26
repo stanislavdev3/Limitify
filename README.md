@@ -1,12 +1,12 @@
 # Limitify
 
-Limitify is a native macOS menu bar application that shows how much Codex usage
-is left and when each limit resets.
+Limitify is a native macOS menu bar application that shows how much Codex or
+Claude Code usage is left and when each limit resets.
 
 ## Requirements
 
 - macOS 14 Sonoma or newer;
-- Codex installed locally, or an existing local Codex sessions directory;
+- Codex and/or Claude Code installed locally;
 - Swift 6 toolchain only when building from source.
 
 ## Build from source
@@ -18,6 +18,11 @@ open dist/Limitify.app
 ```
 
 `make dmg` creates `dist/Limitify-0.1.0.dmg`.
+
+Choose Codex or Claude from the popover menu to control which provider logo,
+compact bar, and percentage are shown in the macOS menu bar. Claude Code must be
+connected once in Settings; Limitify preserves any existing Claude status-line
+command.
 
 To rebuild the release app, stop any running Limitify process, and launch the
 fresh bundle:
