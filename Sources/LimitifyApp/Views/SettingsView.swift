@@ -68,7 +68,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Text("Claude Code sends only its 5-hour and weekly rate-limit fields to a local Limitify cache. Existing Claude status-line output is preserved.")
+                Text("Claude Code sends only its 5-hour and weekly rate-limit fields to a local Limitify cache. Existing status-line output is preserved. Restart open Claude Code sessions after connecting.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -191,7 +191,10 @@ struct UsagePopoverView: View {
             case .providerNotInstalled:
                 return "Install Claude Code, then connect it in Settings."
             case .noUsageEvent:
-                return "Connect Claude Code in Settings and send one message to update its limits."
+                if claudeInstaller.status == .connected {
+                    return "Restart Claude Code and send one message in an interactive session."
+                }
+                return "Connect Claude Code, then start a session and send one message."
             case .accessDenied:
                 return "Limitify cannot read its local Claude usage cache."
             case .malformedData:
@@ -203,7 +206,7 @@ struct UsagePopoverView: View {
             case .unknown:
                 return "An unexpected local Claude provider error occurred."
             case .dataDirectoryMissing, nil:
-                return "Connect Claude Code in Settings to collect local usage limits."
+                return "Connect Claude Code, then restart any open session and send one message."
             }
         }
 

@@ -48,7 +48,9 @@ status-line configuration. If a custom status line already exists, its command
 continues to receive the original input and its output is preserved.
 
 Claude exposes subscription limits after the first API response in a session.
-Send one Claude Code message, then choose Refresh in Limitify. Disconnecting in
+Restart any Claude Code session that was already open when Limitify connected,
+send one message in the interactive CLI, then choose Refresh in Limitify.
+Non-interactive `claude -p` does not render the status line. Disconnecting in
 Settings restores the previous status-line command.
 
 ### Launch at login needs approval

@@ -41,7 +41,7 @@ Current local artifact:
 
 ```text
 dist/Limitify-0.1.0.dmg
-SHA-256 223f63e4da2df2aafb61fa7e04aa32982d1183665212a74ab9d9010e592b471d
+SHA-256 9922b11db51fa9a505544005e2fcb5e0c46f22d9b3b89efc996ea069ed979cf8
 ```
 
 ## External release requirement
