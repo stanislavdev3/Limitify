@@ -1,0 +1,2 @@
+{"timestamp":"2026-01-10T12:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"limit_id":null,"limit_name":null,"primary":{"used_percent":42.25},"secondary":null,"credits":null,"plan_type":null,"unknown_future_field":{"enabled":true}}}}
+{"timestamp":"2026-01-10T12:01:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":125.0,"window_minutes":300,"resets_at":1768053600}}}}
