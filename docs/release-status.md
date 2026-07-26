@@ -9,7 +9,8 @@ Date: 2026-07-26
 - Native macOS 14 menu bar-only SwiftUI application.
 - Compact remaining-allowance bar and percentage using the same value.
 - Most-constrained-window selection.
-- Popover selection of Codex or Claude for the menu-bar logo, bar, and percentage.
+- Simultaneous Codex and Claude popover blocks with radio selection of the
+  menu-bar logo, bar, and percentage.
 - Popover with all selected-provider limit buckets/windows, reset times, plan, refresh time,
   stale warning, and manual refresh.
 - Loading, unavailable, provider-not-installed, missing-directory, no-event,
@@ -40,7 +41,7 @@ Current local artifact:
 
 ```text
 dist/Limitify-0.1.0.dmg
-SHA-256 9951d8c4b850ae818afb5c480ab2c4ccdb0bec48885333c023cb343dc80433ad
+SHA-256 223f63e4da2df2aafb61fa7e04aa32982d1183665212a74ab9d9010e592b471d
 ```
 
 ## External release requirement

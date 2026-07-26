@@ -19,10 +19,10 @@ open dist/Limitify.app
 
 `make dmg` creates `dist/Limitify-0.1.0.dmg`.
 
-Choose Codex or Claude from the popover menu to control which provider logo,
-compact bar, and percentage are shown in the macOS menu bar. Claude Code must be
-connected once in Settings; Limitify preserves any existing Claude status-line
-command.
+Codex and Claude appear as separate blocks in the popover. Select the radio
+button beside either provider to control which logo, compact bar, and percentage
+are shown in the macOS menu bar. Claude Code must be connected once; Limitify
+preserves any existing Claude status-line command.
 
 To rebuild the release app, stop any running Limitify process, and launch the
 fresh bundle:

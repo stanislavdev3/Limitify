@@ -16,7 +16,11 @@ struct LimitifyApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            UsagePopoverView(settings: settings, store: store)
+            UsagePopoverView(
+                settings: settings,
+                store: store,
+                claudeInstaller: claudeInstaller
+            )
                 .onAppear {
                     store.start()
                     store.refreshIfNeeded()

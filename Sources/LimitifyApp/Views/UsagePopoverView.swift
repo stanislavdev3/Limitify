@@ -5,6 +5,7 @@ import SwiftUI
 struct UsagePopoverView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: LimitifyUsageStore
+    @ObservedObject var claudeInstaller: ClaudeStatusLineInstaller
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -23,62 +24,98 @@ struct UsagePopoverView: View {
             Text("Limitify")
                 .font(.headline)
             Spacer()
-            Picker("Menu bar service", selection: $settings.displayProvider) {
-                ForEach(DisplayProvider.allCases) { provider in
-                    Text(provider.displayName).tag(provider)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .accessibilityLabel("Service shown in the menu bar")
-            if let plan = store.usage?.accountLabel {
-                Text(planLabel(plan))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            Text("Select menu bar service")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var content: some View {
+        VStack(spacing: 12) {
+            ForEach(DisplayProvider.allCases) { provider in
+                providerBlock(provider)
             }
         }
     }
 
+    private func providerBlock(_ provider: DisplayProvider) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Button {
+                    settings.displayProvider = provider
+                } label: {
+                    Image(systemName: settings.displayProvider == provider
+                          ? "circle.inset.filled"
+                          : "circle")
+                        .font(.system(size: 13))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(settings.displayProvider == provider ? Color.accentColor : .secondary)
+                .disabled(!store.isEnabled(provider))
+                .accessibilityLabel("Show \(provider.displayName) in the menu bar")
+                .accessibilityValue(settings.displayProvider == provider ? "Selected" : "Not selected")
+
+                ProviderStatusIcon(provider: provider)
+                Text(provider.displayName)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if let plan = store.usage(for: provider)?.accountLabel {
+                    Text(planLabel(plan))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Divider()
+            providerContent(provider)
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+    }
+
     @ViewBuilder
-    private var content: some View {
-        if !store.selectedProviderEnabled {
-            ContentUnavailableView(
-                "\(settings.displayProvider.displayName) is disabled",
-                systemImage: "pause.circle",
-                description: Text("Enable \(settings.displayProvider.displayName) in Settings to show usage limits.")
-            )
-        } else if let usage = store.usage {
-            VStack(alignment: .leading, spacing: 18) {
-                if store.isStale {
+    private func providerContent(_ provider: DisplayProvider) -> some View {
+        let state = store.state(for: provider.providerID)
+        if !store.isEnabled(provider) {
+            Label("Disabled in Settings", systemImage: "pause.circle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else if let usage = state.usage {
+            VStack(alignment: .leading, spacing: 14) {
+                if store.isStale(provider) {
                     Label("Showing stale data", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
                         .foregroundStyle(.orange)
-                        .accessibilityLabel("Warning: showing stale \(settings.displayProvider.displayName) usage data")
                 }
-
                 ForEach(usage.limits, id: \.id) { limit in
                     LimitRow(limit: limit)
                 }
-
-                if let failure = store.state.failure {
-                    Label(failureMessage(failure), systemImage: "wifi.exclamationmark")
+                if let failure = state.failure {
+                    Label(failureMessage(failure, provider: provider), systemImage: "wifi.exclamationmark")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
         } else if store.isRefreshing {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text("Loading \(settings.displayProvider.displayName) usage…")
-                    .foregroundStyle(.secondary)
+                Text("Loading usage…")
             }
-            .frame(maxWidth: .infinity, minHeight: 100)
+            .font(.caption)
+            .foregroundStyle(.secondary)
         } else {
-            ContentUnavailableView(
-                errorTitle(store.state.failure),
-                systemImage: errorIcon(store.state.failure),
-                description: Text(failureMessage(store.state.failure))
-            )
+            VStack(alignment: .leading, spacing: 8) {
+                Label(failureMessage(state.failure, provider: provider), systemImage: errorIcon(state.failure))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if provider == .claude, claudeInstaller.status == .ready {
+                    Button("Connect Claude Code") {
+                        claudeInstaller.connect()
+                        store.refresh()
+                    }
+                    .controlSize(.small)
+                }
+            }
         }
     }
 
@@ -99,9 +136,9 @@ struct UsagePopoverView: View {
                     }
                 }
                 .buttonStyle(.link)
-                .disabled(store.isRefreshing || !store.selectedProviderEnabled)
+                .disabled(store.isRefreshing || !(settings.codexEnabled || settings.claudeEnabled))
                 .keyboardShortcut("r", modifiers: .command)
-                .accessibilityLabel("Refresh \(settings.displayProvider.displayName) usage")
+                .accessibilityLabel("Refresh all usage")
             }
 
             HStack {
@@ -121,32 +158,13 @@ struct UsagePopoverView: View {
     }
 
     private var updatedText: String {
-        guard let date = store.state.lastSuccessfulRefreshAt else { return "Not updated yet" }
+        let dates = store.states.values.compactMap(\.lastSuccessfulRefreshAt)
+        guard let date = dates.max() else { return "Not updated yet" }
         return "Updated \(date.formatted(.relative(presentation: .named)))"
     }
 
     private func planLabel(_ value: String) -> String {
         value.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-
-    private func errorTitle(_ failure: UsageProviderFailure?) -> String {
-        let provider = settings.displayProvider.displayName
-        switch failure {
-        case .providerNotInstalled:
-            return "\(provider) is not installed"
-        case .dataDirectoryMissing:
-            return "\(provider) data not found"
-        case .noUsageEvent:
-            return "No usage data yet"
-        case .accessDenied:
-            return "Access denied"
-        case .malformedData:
-            return "\(provider) data is incomplete"
-        case .unsupportedData:
-            return "Unsupported \(provider) data"
-        default:
-            return "Usage unavailable"
-        }
     }
 
     private func errorIcon(_ failure: UsageProviderFailure?) -> String {
@@ -164,8 +182,11 @@ struct UsagePopoverView: View {
         }
     }
 
-    private func failureMessage(_ failure: UsageProviderFailure?) -> String {
-        if settings.displayProvider == .claude {
+    private func failureMessage(
+        _ failure: UsageProviderFailure?,
+        provider: DisplayProvider
+    ) -> String {
+        if provider == .claude {
             switch failure {
             case .providerNotInstalled:
                 return "Install Claude Code, then connect it in Settings."

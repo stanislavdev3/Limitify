@@ -70,11 +70,20 @@ final class LimitifyUsageStore: ObservableObject {
         states[providerID] ?? ProviderRefreshState()
     }
 
-    var selectedProviderEnabled: Bool {
-        switch settings.displayProvider {
+    func usage(for provider: DisplayProvider) -> ServiceUsage? {
+        state(for: provider.providerID).usage
+    }
+
+    func isEnabled(_ provider: DisplayProvider) -> Bool {
+        switch provider {
         case .codex: settings.codexEnabled
         case .claude: settings.claudeEnabled
         }
+    }
+
+    func isStale(_ provider: DisplayProvider) -> Bool {
+        guard let usage = usage(for: provider) else { return false }
+        return UsagePolicy.isStale(usage, threshold: settings.staleThreshold)
     }
 
     var isStale: Bool {
