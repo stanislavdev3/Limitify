@@ -26,7 +26,7 @@ Date: 2026-07-26
 
 ## Verification
 
-- 28 automated tests pass on macOS.
+- 31 automated tests pass on macOS.
 - Release app passes `codesign --verify --deep --strict`.
 - Release executable is a universal Mach-O containing `x86_64` and `arm64`.
 - `Info.plist` passes `plutil -lint`.
@@ -37,7 +37,7 @@ Current local artifact:
 
 ```text
 dist/Limitify-0.1.0.dmg
-SHA-256 17b9896ff29071704873873553d2ab560c7f0e8c75011e6d84e3c335ce65b459
+SHA-256 ccbecbb3f147e20010f92d74de668093fc86157be3d08f4ab9aab883e2d2bef7
 ```
 
 ## External release requirement

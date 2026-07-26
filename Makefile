@@ -7,7 +7,7 @@ SWIFT_ENV = CLANG_MODULE_CACHE_PATH=$(SWIFT_MODULE_CACHE) \
 	SWIFTPM_MODULECACHE_OVERRIDE=$(SWIFT_MODULE_CACHE) \
 	XDG_CACHE_HOME=$(SWIFT_XDG_CACHE)
 
-.PHONY: test build icon bundle dmg notarize clean
+.PHONY: test build icon bundle restart dmg notarize clean
 
 test:
 	$(SWIFT_ENV) swift test $(SWIFT_BUILD_FLAGS) --cache-path $(SWIFT_CACHE_PATH) --scratch-path .build
@@ -20,6 +20,9 @@ icon:
 
 bundle: icon
 	$(SWIFT_ENV) SWIFT_BUILD_FLAGS="$(SWIFT_BUILD_FLAGS) --cache-path $(SWIFT_CACHE_PATH)" ./scripts/build-app.sh
+
+restart: bundle
+	./scripts/restart-app.sh
 
 dmg: bundle
 	./scripts/build-dmg.sh

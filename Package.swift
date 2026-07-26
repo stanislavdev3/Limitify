@@ -15,7 +15,8 @@ let package = Package(
         .target(name: "LimitifyCore"),
         .executableTarget(
             name: "LimitifyApp",
-            dependencies: ["LimitifyCore"]
+            dependencies: ["LimitifyCore"],
+            resources: [.process("Resources")]
         ),
         .testTarget(
             name: "LimitifyCoreTests",

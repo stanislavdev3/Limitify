@@ -33,6 +33,8 @@ fi
 
 cp "$project_dir/Resources/Info.plist" "$contents/Info.plist"
 cp "$project_dir/Resources/Limitify.icns" "$contents/Resources/Limitify.icns"
+cp "$project_dir/Sources/LimitifyApp/Resources/OpenAIBlossom.svg" \
+    "$contents/Resources/OpenAIBlossom.svg"
 
 codesign --force --sign "$sign_identity" --options runtime --timestamp=none "$app_bundle"
 codesign --verify --deep --strict --verbose=2 "$app_bundle"

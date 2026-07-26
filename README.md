@@ -19,6 +19,13 @@ open dist/Limitify.app
 
 `make dmg` creates `dist/Limitify-0.1.0.dmg`.
 
+To rebuild the release app, stop any running Limitify process, and launch the
+fresh bundle:
+
+```sh
+make restart
+```
+
 For Developer ID distribution, provide a signing identity:
 
 ```sh
