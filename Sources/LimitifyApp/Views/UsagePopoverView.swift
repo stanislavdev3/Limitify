@@ -5,7 +5,7 @@ import SwiftUI
 struct UsagePopoverView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: LimitifyUsageStore
-    @ObservedObject var claudeInstaller: ClaudeStatusLineInstaller
+    @ObservedObject var claudeHub: ClaudeInstallerHub
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -32,35 +32,49 @@ struct UsagePopoverView: View {
 
     private var content: some View {
         VStack(spacing: 12) {
-            ForEach(DisplayProvider.allCases) { provider in
-                providerBlock(provider)
+            if settings.enabledDisplayProviders.isEmpty {
+                Label("All services are disabled. Enable one in Settings.", systemImage: "pause.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                // Cards must scroll: with several accounts (or extra
+                // model-specific windows) an unbounded stack outgrows the
+                // screen and clips the lower cards and the footer.
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(settings.enabledDisplayProviders) { provider in
+                            providerBlock(provider)
+                        }
+                    }
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: 520)
             }
         }
     }
 
     private func providerBlock(_ provider: DisplayProvider) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let isSelected = settings.displayProviderID == provider.providerID
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Button {
-                    settings.displayProvider = provider
+                    settings.displayProviderID = provider.providerID
                 } label: {
-                    Image(systemName: settings.displayProvider == provider
-                          ? "circle.inset.filled"
-                          : "circle")
+                    Image(systemName: isSelected ? "circle.inset.filled" : "circle")
                         .font(.system(size: 13))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(settings.displayProvider == provider ? Color.accentColor : .secondary)
-                .disabled(!store.isEnabled(provider))
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
                 .accessibilityLabel("Show \(provider.displayName) in the menu bar")
-                .accessibilityValue(settings.displayProvider == provider ? "Selected" : "Not selected")
+                .accessibilityValue(isSelected ? "Selected" : "Not selected")
 
-                ProviderStatusIcon(provider: provider)
+                ProviderStatusIcon(kind: provider.kind)
                 Text(provider.displayName)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                if let plan = store.usage(for: provider)?.accountLabel {
-                    Text(planLabel(plan))
+                if let label = accountLabel(provider) {
+                    Text(label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -70,17 +84,24 @@ struct UsagePopoverView: View {
             providerContent(provider)
         }
         .padding(12)
-        .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
+        .background(ProviderCardBackground(tint: provider.tint))
+    }
+
+    /// Codex reports a plan identifier ("plus"), Claude profiles a literal
+    /// account email — only the former wants prettifying.
+    private func accountLabel(_ provider: DisplayProvider) -> String? {
+        switch provider.kind {
+        case .codex:
+            store.usage(for: provider)?.accountLabel.map(planLabel)
+        case .claude:
+            store.usage(for: provider)?.accountLabel ?? provider.accountLabel
+        }
     }
 
     @ViewBuilder
     private func providerContent(_ provider: DisplayProvider) -> some View {
         let state = store.state(for: provider.providerID)
-        if !store.isEnabled(provider) {
-            Label("Disabled in Settings", systemImage: "pause.circle")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        } else if let usage = state.usage {
+        if let usage = state.usage {
             VStack(alignment: .leading, spacing: 14) {
                 if store.isStale(provider) {
                     Label("Showing stale data", systemImage: "exclamationmark.triangle.fill")
@@ -108,9 +129,10 @@ struct UsagePopoverView: View {
                 Label(failureMessage(state.failure, provider: provider), systemImage: errorIcon(state.failure))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if provider == .claude, claudeInstaller.status == .ready {
+                if let installer = claudeHub.installer(for: provider.providerID),
+                   installer.status == .ready {
                     Button("Connect Claude Code") {
-                        claudeInstaller.connect()
+                        installer.connect()
                         store.refresh()
                     }
                     .controlSize(.small)
@@ -186,12 +208,12 @@ struct UsagePopoverView: View {
         _ failure: UsageProviderFailure?,
         provider: DisplayProvider
     ) -> String {
-        if provider == .claude {
+        if provider.kind == .claude {
             switch failure {
             case .providerNotInstalled:
                 return "Install Claude Code, then connect it in Settings."
             case .noUsageEvent:
-                if claudeInstaller.status == .connected {
+                if claudeHub.installer(for: provider.providerID)?.status == .connected {
                     return "Restart Claude Code and send one message in an interactive session."
                 }
                 return "Connect Claude Code, then start a session and send one message."

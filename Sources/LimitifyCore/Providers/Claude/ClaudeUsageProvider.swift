@@ -8,13 +8,24 @@ public enum ClaudeUsageSourceError: Error, Equatable, Sendable {
 }
 
 public struct ClaudeUsageProvider: UsageProvider {
-    public let id: ProviderID = .claude
+    public let id: ProviderID
 
     private let cacheFile: URL
+    private let displayName: String
+    private let accountLabel: String?
     private let executableURL: URL?
 
-    public init(cacheFile: URL, executableURL: URL? = ClaudeExecutableLocator.locate()) {
+    public init(
+        cacheFile: URL,
+        providerID: ProviderID = .claude,
+        displayName: String = "Claude",
+        accountLabel: String? = nil,
+        executableURL: URL? = ClaudeExecutableLocator.locate()
+    ) {
         self.cacheFile = cacheFile
+        id = providerID
+        self.displayName = displayName
+        self.accountLabel = accountLabel
         self.executableURL = executableURL
     }
 
@@ -40,36 +51,50 @@ public struct ClaudeUsageProvider: UsageProvider {
             throw ClaudeUsageSourceError.malformedData
         }
 
-        guard let payload = try? JSONDecoder().decode(CachePayload.self, from: data) else {
+        guard let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw ClaudeUsageSourceError.malformedData
         }
 
         var limits: [UsageLimit] = []
-        if let window = payload.fiveHour {
+        for descriptor in Self.knownWindows {
+            guard let raw = payload[descriptor.key], !(raw is NSNull) else { continue }
+            guard let window = Self.window(from: raw) else {
+                throw ClaudeUsageSourceError.malformedData
+            }
             limits.append(try makeLimit(
-                id: "claude.five-hour",
-                displayName: "5-hour limit",
-                duration: 5 * 60 * 60,
+                id: descriptor.id,
+                displayName: descriptor.displayName,
+                duration: descriptor.duration,
                 window: window
             ))
         }
-        if let window = payload.sevenDay {
-            limits.append(try makeLimit(
-                id: "claude.seven-day",
-                displayName: "Weekly limit",
-                duration: 7 * 24 * 60 * 60,
-                window: window
-            ))
+
+        // Future windows the status line may start reporting are shown with a
+        // humanized name rather than dropped; entries that don't look like
+        // windows are ignored.
+        let knownKeys = Set(Self.knownWindows.map(\.key))
+        for key in payload.keys.sorted() where !knownKeys.contains(key) {
+            guard let raw = payload[key],
+                  let window = Self.window(from: raw),
+                  let limit = try? makeLimit(
+                      id: "claude.\(key.replacingOccurrences(of: "_", with: "-"))",
+                      displayName: Self.humanized(key),
+                      duration: nil,
+                      window: window
+                  )
+            else { continue }
+            limits.append(limit)
         }
+
         guard !limits.isEmpty else {
             throw ClaudeUsageSourceError.noUsageEvent
         }
 
         let values = try cacheFile.resourceValues(forKeys: [.contentModificationDateKey])
         return ServiceUsage(
-            providerID: .claude,
-            displayName: "Claude",
-            accountLabel: nil,
+            providerID: id,
+            displayName: displayName,
+            accountLabel: accountLabel,
             limits: limits,
             observedAt: values.contentModificationDate ?? Date(),
             source: UsageSource(kind: .statusLine, freshness: .observedSnapshot)
@@ -79,7 +104,7 @@ public struct ClaudeUsageProvider: UsageProvider {
     private func makeLimit(
         id: String,
         displayName: String,
-        duration: TimeInterval,
+        duration: TimeInterval?,
         window: Window
     ) throws -> UsageLimit {
         guard window.usedPercentage.isFinite,
@@ -96,24 +121,75 @@ public struct ClaudeUsageProvider: UsageProvider {
             resetAt: Date(timeIntervalSince1970: window.resetsAt)
         )
     }
-}
 
-private struct CachePayload: Decodable {
-    let fiveHour: Window?
-    let sevenDay: Window?
-
-    private enum CodingKeys: String, CodingKey {
-        case fiveHour = "five_hour"
-        case sevenDay = "seven_day"
+    private struct WindowDescriptor {
+        let key: String
+        let id: String
+        let displayName: String
+        let duration: TimeInterval
     }
-}
 
-private struct Window: Decodable {
-    let usedPercentage: Double
-    let resetsAt: TimeInterval
+    private static let knownWindows: [WindowDescriptor] = [
+        WindowDescriptor(
+            key: "five_hour",
+            id: "claude.five-hour",
+            displayName: "5-hour limit",
+            duration: 5 * 60 * 60
+        ),
+        WindowDescriptor(
+            key: "seven_day",
+            id: "claude.seven-day",
+            displayName: "Weekly limit",
+            duration: 7 * 24 * 60 * 60
+        ),
+        WindowDescriptor(
+            key: "seven_day_sonnet",
+            id: "claude.seven-day-sonnet",
+            displayName: "Weekly Sonnet limit",
+            duration: 7 * 24 * 60 * 60
+        ),
+        WindowDescriptor(
+            key: "seven_day_opus",
+            id: "claude.seven-day-opus",
+            displayName: "Weekly Opus limit",
+            duration: 7 * 24 * 60 * 60
+        ),
+        // Not yet reported by the status line (only five_hour and seven_day
+        // are documented); named here ahead of time following the
+        // seven_day_opus convention so a Fable window renders properly the
+        // moment Anthropic ships it.
+        WindowDescriptor(
+            key: "seven_day_fable",
+            id: "claude.seven-day-fable",
+            displayName: "Weekly Fable limit",
+            duration: 7 * 24 * 60 * 60
+        ),
+    ]
 
-    private enum CodingKeys: String, CodingKey {
-        case usedPercentage = "used_percentage"
-        case resetsAt = "resets_at"
+    private struct Window {
+        let usedPercentage: Double
+        let resetsAt: TimeInterval
+    }
+
+    private static func window(from raw: Any) -> Window? {
+        guard let object = raw as? [String: Any],
+              let usedPercentage = number(object["used_percentage"]),
+              let resetsAt = number(object["resets_at"])
+        else { return nil }
+        return Window(usedPercentage: usedPercentage, resetsAt: resetsAt)
+    }
+
+    /// JSONSerialization bridges JSON booleans to NSNumber too; a boolean
+    /// percentage must read as malformed data, not as 0 or 1.
+    private static func number(_ raw: Any?) -> Double? {
+        guard let number = raw as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID()
+        else { return nil }
+        return number.doubleValue
+    }
+
+    private static func humanized(_ key: String) -> String {
+        let words = key.replacingOccurrences(of: "_", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
     }
 }

@@ -63,7 +63,7 @@ final class LimitifyUsageStore: ObservableObject {
     }
 
     var state: ProviderRefreshState {
-        state(for: settings.displayProvider.providerID)
+        state(for: settings.displayProviderID)
     }
 
     func state(for providerID: ProviderID) -> ProviderRefreshState {
@@ -72,13 +72,6 @@ final class LimitifyUsageStore: ObservableObject {
 
     func usage(for provider: DisplayProvider) -> ServiceUsage? {
         state(for: provider.providerID).usage
-    }
-
-    func isEnabled(_ provider: DisplayProvider) -> Bool {
-        switch provider {
-        case .codex: settings.codexEnabled
-        case .claude: settings.claudeEnabled
-        }
     }
 
     func isStale(_ provider: DisplayProvider) -> Bool {
@@ -114,7 +107,8 @@ final class LimitifyUsageStore: ObservableObject {
             codexEnabled: settings.codexEnabled,
             codexSessionsURL: settings.expandedCodexSessionsURL,
             claudeEnabled: settings.claudeEnabled,
-            claudeCacheURL: ClaudeDataLocation.defaultCacheFile()
+            claudeProfiles: settings.claudeProfiles,
+            claudeCustomizations: settings.claudeProfileCustomizations
         )
         guard configuration != appliedConfiguration else { return false }
 
@@ -134,7 +128,15 @@ final class LimitifyUsageStore: ObservableObject {
             providers.append(CodexUsageProvider(preferred: preferred, fallback: fallback))
         }
         if configuration.claudeEnabled {
-            providers.append(ClaudeUsageProvider(cacheFile: configuration.claudeCacheURL))
+            providers.append(contentsOf: configuration.claudeProfiles.map { profile in
+                ClaudeUsageProvider(
+                    cacheFile: ClaudeDataLocation.cacheFile(forProfileSlug: profile.slug),
+                    providerID: profile.providerID,
+                    displayName: configuration.claudeCustomizations[profile.slug]?.normalizedLabel
+                        ?? profile.displayName,
+                    accountLabel: profile.accountLabel
+                )
+            })
         }
         coordinator = UsageRefreshCoordinator(providers: providers)
         return true
@@ -145,5 +147,6 @@ private struct ProviderConfiguration: Equatable {
     let codexEnabled: Bool
     let codexSessionsURL: URL
     let claudeEnabled: Bool
-    let claudeCacheURL: URL
+    let claudeProfiles: [ClaudeProfile]
+    let claudeCustomizations: [String: ClaudeProfileCustomization]
 }

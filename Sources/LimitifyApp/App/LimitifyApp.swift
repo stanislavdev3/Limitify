@@ -6,12 +6,15 @@ struct LimitifyApp: App {
     @StateObject private var settings: AppSettings
     @StateObject private var store: LimitifyUsageStore
     @StateObject private var launchAtLogin = LaunchAtLoginManager()
-    @StateObject private var claudeInstaller = ClaudeStatusLineInstaller()
+    @StateObject private var claudeHub: ClaudeInstallerHub
 
     init() {
         let settings = AppSettings()
         _settings = StateObject(wrappedValue: settings)
         _store = StateObject(wrappedValue: LimitifyUsageStore(settings: settings))
+        let hub = ClaudeInstallerHub()
+        hub.sync(with: settings.claudeProfiles)
+        _claudeHub = StateObject(wrappedValue: hub)
     }
 
     var body: some Scene {
@@ -19,9 +22,11 @@ struct LimitifyApp: App {
             UsagePopoverView(
                 settings: settings,
                 store: store,
-                claudeInstaller: claudeInstaller
+                claudeHub: claudeHub
             )
                 .onAppear {
+                    settings.refreshClaudeProfiles()
+                    claudeHub.sync(with: settings.claudeProfiles)
                     store.start()
                     store.refreshIfNeeded()
                 }
@@ -46,7 +51,7 @@ struct LimitifyApp: App {
                 settings: settings,
                 store: store,
                 launchAtLogin: launchAtLogin,
-                claudeInstaller: claudeInstaller
+                claudeHub: claudeHub
             )
         }
     }

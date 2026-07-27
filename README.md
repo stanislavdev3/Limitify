@@ -19,10 +19,16 @@ open dist/Limitify.app
 
 `make dmg` creates `dist/Limitify-0.1.0.dmg`.
 
-Codex and Claude appear as separate blocks in the popover. Select the radio
-button beside either provider to control which logo, compact bar, and percentage
-are shown in the macOS menu bar. Claude Code must be connected once; Limitify
-preserves any existing Claude status-line command.
+Codex and every Claude account appear as separate blocks in the popover
+(disabled services are hidden). Select the radio button beside a provider to
+control which logo, compact bar, and percentage are shown in the macOS menu
+bar. Each Claude account must be connected once; Limitify preserves any
+existing Claude status-line command.
+
+Multiple Claude accounts are detected automatically (`~/.claude` plus any
+logged-in `~/.claude-*` config directory); other `CLAUDE_CONFIG_DIR` locations
+can be added in Settings. Every account card can get a custom label and a
+muted background tint — see `docs/claude-multi-account.md`.
 
 To rebuild the release app, stop any running Limitify process, and launch the
 fresh bundle:
