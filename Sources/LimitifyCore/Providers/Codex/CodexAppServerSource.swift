@@ -2,6 +2,7 @@ import Foundation
 
 public enum CodexAppServerError: Error, Equatable, Sendable {
     case executableUnavailable
+    case executableQuarantined
     case launchFailed
     case timeout
     case connectionClosed
@@ -36,6 +37,9 @@ public struct CodexAppServerSource: UsageProvider {
     ) throws -> ServiceUsage {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw CodexAppServerError.executableUnavailable
+        }
+        guard CodexLaunchGate.isSafeToLaunch(executableURL) else {
+            throw CodexAppServerError.executableQuarantined
         }
 
         let process = Process()
