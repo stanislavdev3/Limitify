@@ -20,6 +20,8 @@ final class ClaudeStatusLineInstaller: ObservableObject {
 
     private let settingsFile: URL
     private let supportDirectory: URL
+    private let cacheFile: URL
+    private let keys: Keys
     private let bundledCollector: URL?
     private let defaults: UserDefaults
     private let executableLocator: () -> URL?
@@ -28,23 +30,31 @@ final class ClaudeStatusLineInstaller: ObservableObject {
         supportDirectory.appending(path: "LimitifyClaudeStatusLine.sh")
     }
 
-    private var cacheFile: URL {
-        supportDirectory.appending(path: "claude-usage.json")
-    }
-
     init(
         settingsFile: URL = ClaudeDataLocation.defaultSettingsFile(),
         supportDirectory: URL = ClaudeDataLocation.defaultCacheFile().deletingLastPathComponent(),
+        cacheFile: URL? = nil,
+        profileSlug: String = ClaudeProfile.defaultSlug,
         bundledCollector: URL? = ClaudeStatusLineInstaller.defaultBundledCollector,
         defaults: UserDefaults = .standard,
         executableLocator: @escaping () -> URL? = { ClaudeExecutableLocator.locate() }
     ) {
         self.settingsFile = settingsFile
         self.supportDirectory = supportDirectory
+        self.cacheFile = cacheFile ?? supportDirectory.appending(path: "claude-usage.json")
+        keys = Keys(profileSlug: profileSlug)
         self.bundledCollector = bundledCollector
         self.defaults = defaults
         self.executableLocator = executableLocator
         refreshStatus()
+    }
+
+    convenience init(profile: ClaudeProfile) {
+        self.init(
+            settingsFile: profile.settingsFile,
+            cacheFile: ClaudeDataLocation.cacheFile(forProfileSlug: profile.slug),
+            profileSlug: profile.slug
+        )
     }
 
     func refreshStatus() {
@@ -84,19 +94,19 @@ final class ClaudeStatusLineInstaller: ObservableObject {
             var statusLine = settings["statusLine"] as? [String: Any] ?? [:]
             let current = statusLine["command"] as? String
             if let current, !current.contains("LimitifyClaudeStatusLine.sh") {
-                defaults.set(current, forKey: Keys.previousCommand)
+                defaults.set(current, forKey: keys.previousCommand)
                 defaults.set(
                     try JSONSerialization.data(withJSONObject: statusLine),
-                    forKey: Keys.previousStatusLine
+                    forKey: keys.previousStatusLine
                 )
-                defaults.set(true, forKey: Keys.hadPreviousCommand)
+                defaults.set(true, forKey: keys.hadPreviousCommand)
             } else if current == nil {
-                defaults.removeObject(forKey: Keys.previousCommand)
-                defaults.removeObject(forKey: Keys.previousStatusLine)
-                defaults.set(false, forKey: Keys.hadPreviousCommand)
+                defaults.removeObject(forKey: keys.previousCommand)
+                defaults.removeObject(forKey: keys.previousStatusLine)
+                defaults.set(false, forKey: keys.hadPreviousCommand)
             }
 
-            let previous = defaults.string(forKey: Keys.previousCommand) ?? ""
+            let previous = defaults.string(forKey: keys.previousCommand) ?? ""
             let encoded = Data(previous.utf8).base64EncodedString()
             statusLine["type"] = "command"
             statusLine["command"] = [
@@ -118,8 +128,8 @@ final class ClaudeStatusLineInstaller: ObservableObject {
             var settings = try loadSettings()
             if let statusLine = settings["statusLine"] as? [String: Any],
                (statusLine["command"] as? String)?.contains("LimitifyClaudeStatusLine.sh") == true {
-                if defaults.bool(forKey: Keys.hadPreviousCommand),
-                   let data = defaults.data(forKey: Keys.previousStatusLine),
+                if defaults.bool(forKey: keys.hadPreviousCommand),
+                   let data = defaults.data(forKey: keys.previousStatusLine),
                    let previous = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     settings["statusLine"] = previous
                 } else {
@@ -127,9 +137,9 @@ final class ClaudeStatusLineInstaller: ObservableObject {
                 }
                 try writeSettings(settings)
             }
-            defaults.removeObject(forKey: Keys.previousCommand)
-            defaults.removeObject(forKey: Keys.previousStatusLine)
-            defaults.removeObject(forKey: Keys.hadPreviousCommand)
+            defaults.removeObject(forKey: keys.previousCommand)
+            defaults.removeObject(forKey: keys.previousStatusLine)
+            defaults.removeObject(forKey: keys.hadPreviousCommand)
             status = executableLocator() == nil ? .notInstalled : .ready
         } catch {
             status = .failed(error.localizedDescription)
@@ -165,10 +175,19 @@ final class ClaudeStatusLineInstaller: ObservableObject {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
-    private enum Keys {
-        static let previousCommand = "claudePreviousStatusLineCommand"
-        static let previousStatusLine = "claudePreviousStatusLine"
-        static let hadPreviousCommand = "claudeHadPreviousStatusLineCommand"
+    /// The default profile keeps the historical key names so backups made by
+    /// earlier versions stay restorable.
+    private struct Keys {
+        let previousCommand: String
+        let previousStatusLine: String
+        let hadPreviousCommand: String
+
+        init(profileSlug: String) {
+            let suffix = profileSlug == ClaudeProfile.defaultSlug ? "" : ".\(profileSlug)"
+            previousCommand = "claudePreviousStatusLineCommand" + suffix
+            previousStatusLine = "claudePreviousStatusLine" + suffix
+            hadPreviousCommand = "claudeHadPreviousStatusLineCommand" + suffix
+        }
     }
 
     private enum InstallerError: LocalizedError {

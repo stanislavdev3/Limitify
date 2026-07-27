@@ -6,6 +6,10 @@ struct MenuBarUsageLabel: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: LimitifyUsageStore
 
+    private var displayName: String {
+        settings.currentDisplayProvider?.displayName ?? "Usage"
+    }
+
     var body: some View {
         if let limit = store.constrainedLimit {
             Label {
@@ -15,22 +19,24 @@ struct MenuBarUsageLabel: View {
                     .lineLimit(1)
                     .fixedSize()
             } icon: {
-                ProviderStatusIcon(provider: settings.displayProvider)
+                ProviderStatusIcon(
+                    kind: settings.displayProviderID.isClaudeProvider ? .claude : .codex
+                )
             }
             .labelStyle(.titleAndIcon)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(
-                "Codex \(percentage(limit.remainingFraction)) percent remaining\(store.isStale ? ", data stale" : "")"
+                "\(displayName) \(percentage(limit.remainingFraction)) percent remaining\(store.isStale ? ", data stale" : "")"
             )
         } else if store.isRefreshing {
             Image(systemName: "arrow.triangle.2.circlepath")
-                .accessibilityLabel("Refreshing Codex usage")
+                .accessibilityLabel("Refreshing \(displayName) usage")
         } else {
             HStack(spacing: 4) {
                 Image(systemName: "gauge.with.dots.needle.33percent")
                 Text("—")
             }
-            .accessibilityLabel("Codex usage unavailable")
+            .accessibilityLabel("\(displayName) usage unavailable")
         }
     }
 
@@ -108,11 +114,11 @@ struct ClaudeStatusIcon: View {
 }
 
 struct ProviderStatusIcon: View {
-    let provider: DisplayProvider
+    let kind: DisplayProvider.Kind
 
     @ViewBuilder
     var body: some View {
-        switch provider {
+        switch kind {
         case .codex: OpenAIStatusIcon()
         case .claude: ClaudeStatusIcon()
         }

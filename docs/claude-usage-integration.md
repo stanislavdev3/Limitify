@@ -8,6 +8,15 @@ documents two subscription windows:
 - `rate_limits.five_hour.used_percentage` and `resets_at`;
 - `rate_limits.seven_day.used_percentage` and `resets_at`.
 
+The parser additionally understands the model-specific weekly windows that Max
+plans report (`seven_day_opus`, `seven_day_sonnet`), pre-names a
+`seven_day_fable` window following the same convention (not yet reported by
+the status line as of July 2026 — Fable 5 usage counts against the shared
+`five_hour`/`seven_day` windows), and keeps any future window-shaped
+`rate_limits` entry (an object with `used_percentage` and `resets_at`) under a
+humanized name instead of dropping it. Non-window entries are ignored;
+malformed values in known windows are still rejected as malformed data.
+
 The fields appear for Claude.ai Pro/Max subscribers after the first API response
 in a session. Status-line execution is local and does not consume API tokens.
 Reference: <https://code.claude.com/docs/en/statusline>.
@@ -20,13 +29,17 @@ times without an extra request.
 ## Data flow
 
 ```text
-Claude Code status-line JSON
+Claude Code status-line JSON (one per profile/account)
     -> LimitifyClaudeStatusLine.sh
-    -> rate_limits-only local cache
-    -> ClaudeUsageProvider
+    -> rate_limits-only local cache (claude-usage[-<profile>].json)
+    -> ClaudeUsageProvider (one instance per profile)
     -> common ServiceUsage model
-    -> popover and selected menu-bar label
+    -> popover card per account and selected menu-bar label
 ```
+
+Multiple Claude accounts are supported through per-config-directory profiles;
+see [claude-multi-account.md](claude-multi-account.md). The account email shown
+on each card comes from the profile's local `.claude.json` state file.
 
 The collector uses macOS `plutil` to project only the `rate_limits` object. It
 passes the unmodified JSON to a pre-existing status-line command and relays that
