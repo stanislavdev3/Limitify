@@ -56,31 +56,67 @@ struct ClaudeProfileTests {
             ]
         )
 
-        #expect(profiles.map(\.slug) == ["default", "personal", "claude-work"])
+        #expect(profiles.count == 3)
+        #expect(profiles.map(\.slug).prefix(2) == ["default", "personal"])
+        #expect(profiles[2].slug.hasPrefix("claude-work-"))
         #expect(profiles.map(\.isManual) == [false, false, true])
         #expect(profiles[2].accountLabel == "work@example.com")
     }
 
-    @Test("Custom directory slugs are sanitized and deduplicated")
+    @Test("Custom directory slugs are sanitized and depend only on the path")
     func slugGeneration() {
-        #expect(
-            ClaudeProfileDiscovery.slug(
-                forCustomDirectory: URL(fileURLWithPath: "/x/Claude Work (Team)"),
-                existing: []
-            ) == "claude-work-team"
+        let slug = ClaudeProfileDiscovery.slug(
+            forCustomDirectory: URL(fileURLWithPath: "/x/Claude Work (Team)")
         )
+        #expect(slug.hasPrefix("claude-work-team-"))
+        #expect(slug.count == "claude-work-team-".count + 6)
+        // Deterministic for the same path, distinct for same-named directories
+        // elsewhere.
+        #expect(slug == ClaudeProfileDiscovery.slug(
+            forCustomDirectory: URL(fileURLWithPath: "/x/Claude Work (Team)")
+        ))
+        #expect(slug != ClaudeProfileDiscovery.slug(
+            forCustomDirectory: URL(fileURLWithPath: "/y/Claude Work (Team)")
+        ))
         #expect(
-            ClaudeProfileDiscovery.slug(
-                forCustomDirectory: URL(fileURLWithPath: "/x/personal"),
-                existing: ["personal", "personal-2"]
-            ) == "personal-3"
+            ClaudeProfileDiscovery.slug(forCustomDirectory: URL(fileURLWithPath: "/x/..."))
+                .hasPrefix("account-")
         )
-        #expect(
-            ClaudeProfileDiscovery.slug(
-                forCustomDirectory: URL(fileURLWithPath: "/x/..."),
-                existing: []
-            ) == "account"
-        )
+    }
+
+    @Test("A ~/.claude-default directory cannot shadow the default profile")
+    func defaultSlugReserved() throws {
+        let home = try TemporaryHome()
+        try home.makeDirectory(".claude-default")
+        try home.write(".claude-default/.claude.json", json: [:])
+
+        let profiles = ClaudeProfileDiscovery.discover(homeDirectory: home.url)
+
+        #expect(profiles.map(\.slug) == ["default", "default-2"])
+        #expect(Set(profiles.map(\.providerID)).count == profiles.count)
+        #expect(profiles[1].providerID == ProviderID(rawValue: "claude:default-2"))
+    }
+
+    @Test("Manual slugs survive a same-named automatic profile appearing later")
+    func manualSlugStability() throws {
+        let home = try TemporaryHome()
+        try home.makeDirectory("Configs/personal")
+        try home.write("Configs/personal/.claude.json", json: [:])
+        let manualDirectory = home.url.appending(path: "Configs/personal", directoryHint: .isDirectory)
+
+        let before = try #require(ClaudeProfileDiscovery.discover(
+            homeDirectory: home.url,
+            additionalDirectories: [manualDirectory]
+        ).last)
+
+        try home.makeDirectory(".claude-personal")
+        try home.write(".claude-personal/.claude.json", json: [:])
+        let after = try #require(ClaudeProfileDiscovery.discover(
+            homeDirectory: home.url,
+            additionalDirectories: [manualDirectory]
+        ).last)
+
+        #expect(before.slug == after.slug)
     }
 
     @Test("Per-profile caches share the historical default file name")

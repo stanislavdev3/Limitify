@@ -83,6 +83,23 @@ struct ClaudeUsageProviderTests {
         #expect(usage.limits[4].windowDuration == nil)
     }
 
+    @Test("Boolean window values are malformed data, not 0 or 1")
+    func booleanWindowValues() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let cache = directory.appending(path: "claude-usage.json")
+        try Data(#"{"five_hour":{"used_percentage":true,"resets_at":1785078000}}"#.utf8)
+            .write(to: cache)
+
+        await #expect(throws: ClaudeUsageSourceError.malformedData) {
+            try await ClaudeUsageProvider(
+                cacheFile: cache,
+                executableURL: URL(fileURLWithPath: "/synthetic/claude")
+            ).fetchUsage()
+        }
+    }
+
     @Test("Rejects malformed percentages without exposing raw data")
     func malformedPercentage() async throws {
         let directory = FileManager.default.temporaryDirectory

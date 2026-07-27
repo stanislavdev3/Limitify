@@ -21,8 +21,13 @@ own menu-bar selection entry.
   user via *Settings → Claude → Add Account Directory…*. Added paths persist in
   `UserDefaults` (`claudeProfileDirectories`), are deduplicated against
   discovered profiles, and can be removed again (files are never touched).
-  Their slug is sanitized from the directory name (`Claude Work (Team)` →
-  `claude-work-team`) and suffixed on collision.
+  Their slug is the sanitized directory name plus a short path digest
+  (`Claude Work (Team)` → `claude-work-team-a1b2c3`), so it depends only on
+  the path itself — a later-discovered `~/.claude-*` with the same name can
+  never remap a manual account's cache, selection, or customization.
+- Automatic slugs are uniqued with the `default` slug reserved: a
+  `~/.claude-default` directory becomes `default-2` instead of shadowing the
+  default profile's provider ID.
 
 The account label is read from the profile's `.claude.json` →
 `oauthAccount.emailAddress`. This file contains no credentials; Limitify still

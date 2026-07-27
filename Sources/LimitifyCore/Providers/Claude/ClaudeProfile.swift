@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 /// One Claude Code installation, identified by its config directory.
@@ -65,11 +66,15 @@ public enum ClaudeProfileDiscovery {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
         for directory in extraDirectories {
-            let slug = String(directory.lastPathComponent.dropFirst(".claude-".count))
+            let name = String(directory.lastPathComponent.dropFirst(".claude-".count))
             let stateFile = directory.appending(path: ".claude.json")
             // A directory without a state file has never completed a login and
             // cannot produce usage data.
-            guard !slug.isEmpty, fileManager.fileExists(atPath: stateFile.path) else { continue }
+            guard !name.isEmpty, fileManager.fileExists(atPath: stateFile.path) else { continue }
+            // "default" is reserved: a "~/.claude-default" directory must not
+            // reuse the default profile's provider ID, which would crash the
+            // refresh coordinator on duplicate keys.
+            let slug = uniqueSlug(name, existing: Set(profiles.map(\.slug)))
             profiles.append(ClaudeProfile(
                 slug: slug,
                 configDirectory: directory,
@@ -83,7 +88,7 @@ public enum ClaudeProfileDiscovery {
                 $0.configDirectory.standardizedFileURL.path == standardized.path
             }) else { continue }
             profiles.append(ClaudeProfile(
-                slug: slug(forCustomDirectory: standardized, existing: Set(profiles.map(\.slug))),
+                slug: slug(forCustomDirectory: standardized),
                 configDirectory: standardized,
                 accountLabel: accountLabel(stateFile: standardized.appending(path: ".claude.json")),
                 isManual: true
@@ -92,19 +97,20 @@ public enum ClaudeProfileDiscovery {
         return profiles
     }
 
-    /// Slugs name cache files and provider IDs, so they must be filesystem-
-    /// and defaults-safe, and deterministic for a given directory.
-    static func slug(forCustomDirectory directory: URL, existing: Set<String>) -> String {
-        var base = directory.lastPathComponent.lowercased()
-            .map { $0.isLetter || $0.isNumber ? $0 : "-" }
-            .reduce(into: "") { result, character in
-                guard !(character == "-" && result.hasSuffix("-")) else { return }
-                result.append(character)
-            }
-            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
-        if base.isEmpty {
-            base = "account"
-        }
+    /// Slugs name cache files, provider IDs, and stored selections, so a
+    /// manual profile's slug must depend only on its own path — never on which
+    /// automatic profiles happen to exist, or a later-discovered `~/.claude-*`
+    /// would silently remap the manual account's cache and settings. A short
+    /// path digest keeps the slug deterministic and collision-free.
+    static func slug(forCustomDirectory directory: URL) -> String {
+        let path = directory.standardizedFileURL.path
+        let digest = SHA256.hash(data: Data(path.utf8))
+        let suffix = digest.prefix(3).map { String(format: "%02x", $0) }.joined()
+        return "\(sanitized(directory.lastPathComponent))-\(suffix)"
+    }
+
+    static func uniqueSlug(_ name: String, existing: Set<String>) -> String {
+        let base = sanitized(name)
         var candidate = base
         var index = 2
         while existing.contains(candidate) {
@@ -112,6 +118,17 @@ public enum ClaudeProfileDiscovery {
             index += 1
         }
         return candidate
+    }
+
+    private static func sanitized(_ name: String) -> String {
+        let base = name.lowercased()
+            .map { $0.isLetter || $0.isNumber ? $0 : "-" }
+            .reduce(into: "") { result, character in
+                guard !(character == "-" && result.hasSuffix("-")) else { return }
+                result.append(character)
+            }
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return base.isEmpty ? "account" : base
     }
 
     static func accountLabel(stateFile: URL) -> String? {

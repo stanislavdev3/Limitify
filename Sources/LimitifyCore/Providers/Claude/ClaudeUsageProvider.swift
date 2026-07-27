@@ -173,13 +173,19 @@ public struct ClaudeUsageProvider: UsageProvider {
 
     private static func window(from raw: Any) -> Window? {
         guard let object = raw as? [String: Any],
-              let usedPercentage = object["used_percentage"] as? NSNumber,
-              let resetsAt = object["resets_at"] as? NSNumber
+              let usedPercentage = number(object["used_percentage"]),
+              let resetsAt = number(object["resets_at"])
         else { return nil }
-        return Window(
-            usedPercentage: usedPercentage.doubleValue,
-            resetsAt: resetsAt.doubleValue
-        )
+        return Window(usedPercentage: usedPercentage, resetsAt: resetsAt)
+    }
+
+    /// JSONSerialization bridges JSON booleans to NSNumber too; a boolean
+    /// percentage must read as malformed data, not as 0 or 1.
+    private static func number(_ raw: Any?) -> Double? {
+        guard let number = raw as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID()
+        else { return nil }
+        return number.doubleValue
     }
 
     private static func humanized(_ key: String) -> String {
