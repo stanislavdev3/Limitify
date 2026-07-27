@@ -25,9 +25,15 @@ own menu-bar selection entry.
   (`Claude Work (Team)` → `claude-work-team-a1b2c3`), so it depends only on
   the path itself — a later-discovered `~/.claude-*` with the same name can
   never remap a manual account's cache, selection, or customization.
-- Automatic slugs are uniqued with the `default` slug reserved: a
-  `~/.claude-default` directory becomes `default-2` instead of shadowing the
-  default profile's provider ID.
+- Automatic slugs are also path-stable: a `~/.claude-<name>` keeps `<name>`
+  verbatim when it is already a clean slug (distinct directory names guarantee
+  distinct slugs), while a name that sanitization would alter — or the
+  reserved `default`, whose provider ID belongs to `~/.claude` — gets the
+  path-digest suffix instead. No slug ever depends on which other profiles
+  exist.
+- The popover wraps the account cards in a scroll view capped at 520 pt, so
+  many accounts (or extra model-specific windows) cannot push the cards and
+  the footer off screen.
 
 The account label is read from the profile's `.claude.json` →
 `oauthAccount.emailAddress`. This file contains no credentials; Limitify still

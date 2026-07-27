@@ -38,9 +38,18 @@ struct UsagePopoverView: View {
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ForEach(settings.enabledDisplayProviders) { provider in
-                    providerBlock(provider)
+                // Cards must scroll: with several accounts (or extra
+                // model-specific windows) an unbounded stack outgrows the
+                // screen and clips the lower cards and the footer.
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(settings.enabledDisplayProviders) { provider in
+                            providerBlock(provider)
+                        }
+                    }
                 }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: 520)
             }
         }
     }

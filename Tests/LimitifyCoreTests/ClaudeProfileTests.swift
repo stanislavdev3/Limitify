@@ -92,9 +92,32 @@ struct ClaudeProfileTests {
 
         let profiles = ClaudeProfileDiscovery.discover(homeDirectory: home.url)
 
-        #expect(profiles.map(\.slug) == ["default", "default-2"])
+        #expect(profiles.count == 2)
+        #expect(profiles[0].slug == "default")
+        #expect(profiles[1].slug.hasPrefix("default-"))
         #expect(Set(profiles.map(\.providerID)).count == profiles.count)
-        #expect(profiles[1].providerID == ProviderID(rawValue: "claude:default-2"))
+    }
+
+    @Test("Automatic slugs survive same-sanitizing siblings appearing or vanishing")
+    func automaticSlugStability() throws {
+        let home = try TemporaryHome()
+        try home.makeDirectory(".claude-work-team")
+        try home.write(".claude-work-team/.claude.json", json: [:])
+
+        let alone = ClaudeProfileDiscovery.discover(homeDirectory: home.url)
+
+        try home.makeDirectory(".claude-work_team")
+        try home.write(".claude-work_team/.claude.json", json: [:])
+        let together = ClaudeProfileDiscovery.discover(homeDirectory: home.url)
+
+        // The clean name keeps its slug; the sanitized one carries a digest.
+        #expect(alone.last?.slug == "work-team")
+        #expect(together.contains { $0.slug == "work-team" })
+        #expect(Set(together.map(\.slug)).count == together.count)
+        let sanitizedSibling = try #require(together.first {
+            $0.configDirectory.lastPathComponent == ".claude-work_team"
+        })
+        #expect(sanitizedSibling.slug.hasPrefix("work-team-"))
     }
 
     @Test("Manual slugs survive a same-named automatic profile appearing later")

@@ -71,12 +71,8 @@ public enum ClaudeProfileDiscovery {
             // A directory without a state file has never completed a login and
             // cannot produce usage data.
             guard !name.isEmpty, fileManager.fileExists(atPath: stateFile.path) else { continue }
-            // "default" is reserved: a "~/.claude-default" directory must not
-            // reuse the default profile's provider ID, which would crash the
-            // refresh coordinator on duplicate keys.
-            let slug = uniqueSlug(name, existing: Set(profiles.map(\.slug)))
             profiles.append(ClaudeProfile(
-                slug: slug,
+                slug: automaticSlug(name: name, directory: directory),
                 configDirectory: directory,
                 accountLabel: accountLabel(stateFile: stateFile)
             ))
@@ -97,27 +93,34 @@ public enum ClaudeProfileDiscovery {
         return profiles
     }
 
-    /// Slugs name cache files, provider IDs, and stored selections, so a
-    /// manual profile's slug must depend only on its own path — never on which
-    /// automatic profiles happen to exist, or a later-discovered `~/.claude-*`
-    /// would silently remap the manual account's cache and settings. A short
-    /// path digest keeps the slug deterministic and collision-free.
-    static func slug(forCustomDirectory directory: URL) -> String {
-        let path = directory.standardizedFileURL.path
-        let digest = SHA256.hash(data: Data(path.utf8))
-        let suffix = digest.prefix(3).map { String(format: "%02x", $0) }.joined()
-        return "\(sanitized(directory.lastPathComponent))-\(suffix)"
+    // Slugs name cache files, provider IDs, and stored selections, so every
+    // slug must depend only on its own directory — never on which other
+    // profiles happen to exist, or adding/removing one account would silently
+    // remap another account's cache and settings.
+
+    /// A `~/.claude-<name>` directory keeps `<name>` verbatim when it is
+    /// already a clean slug (distinct directory names then guarantee distinct
+    /// slugs). A name that sanitization would alter — or the reserved
+    /// `default`, whose provider ID belongs to `~/.claude` — gets a path
+    /// digest instead, since two altered names can collide.
+    static func automaticSlug(name: String, directory: URL) -> String {
+        let base = sanitized(name)
+        guard base == name, base != ClaudeProfile.defaultSlug else {
+            return "\(base)-\(pathDigest(directory))"
+        }
+        return base
     }
 
-    static func uniqueSlug(_ name: String, existing: Set<String>) -> String {
-        let base = sanitized(name)
-        var candidate = base
-        var index = 2
-        while existing.contains(candidate) {
-            candidate = "\(base)-\(index)"
-            index += 1
-        }
-        return candidate
+    /// Manual directories always carry the digest: their bare names live in a
+    /// different namespace than `~/.claude-*` and could otherwise collide
+    /// with an automatic slug.
+    static func slug(forCustomDirectory directory: URL) -> String {
+        "\(sanitized(directory.lastPathComponent))-\(pathDigest(directory))"
+    }
+
+    private static func pathDigest(_ directory: URL) -> String {
+        let digest = SHA256.hash(data: Data(directory.standardizedFileURL.path.utf8))
+        return digest.prefix(3).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func sanitized(_ name: String) -> String {
