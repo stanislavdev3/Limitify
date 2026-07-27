@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  RELEASE_LINE: "0.1"
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Pick version
+        id: version
+        run: |
+          tag=$(git tag --points-at "$GITHUB_SHA" --list "v$RELEASE_LINE.*" | head -1)
+          if [ -z "$tag" ]; then
+            patch=$(git tag --list "v$RELEASE_LINE.*" | awk -F. '$3 ~ /^[0-9]+$/ { print $3 }' | sort -n | tail -1)
+            tag="v$RELEASE_LINE.$((${patch:-0} + 1))"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: make test
+
+      - name: Build DMG
+        run: make dmg VERSION=${{ steps.version.outputs.version }}
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          dmg="dist/Limitify-$VERSION.dmg"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$dmg" --clobber
+          else
+            gh release create "$TAG" "$dmg" --target "$GITHUB_SHA" --generate-notes --title "$TAG"
+          fi

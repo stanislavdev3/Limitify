@@ -5,6 +5,7 @@ project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 configuration=${CONFIGURATION:-release}
 sign_identity=${SIGN_IDENTITY:--}
 universal=${UNIVERSAL:-1}
+version=${VERSION:-0.1.0}
 dist_dir="$project_dir/dist"
 app_bundle="$dist_dir/Limitify.app"
 contents="$app_bundle/Contents"
@@ -32,6 +33,7 @@ else
 fi
 
 cp "$project_dir/Resources/Info.plist" "$contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$contents/Info.plist"
 cp "$project_dir/Resources/Limitify.icns" "$contents/Resources/Limitify.icns"
 cp "$project_dir/Sources/LimitifyApp/Resources/OpenAIBlossom.svg" \
     "$contents/Resources/OpenAIBlossom.svg"

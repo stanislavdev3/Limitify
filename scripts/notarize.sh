@@ -2,7 +2,8 @@
 set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-dmg_path="$project_dir/dist/Limitify-0.1.0.dmg"
+version=${VERSION:-0.1.0}
+dmg_path="$project_dir/dist/Limitify-$version.dmg"
 
 if [ -z "${NOTARY_PROFILE:-}" ]; then
     echo "Set NOTARY_PROFILE to an xcrun notarytool keychain profile." >&2

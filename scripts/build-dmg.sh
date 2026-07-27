@@ -3,7 +3,8 @@ set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 app_bundle="$project_dir/dist/Limitify.app"
-dmg_path="$project_dir/dist/Limitify-0.1.0.dmg"
+version=${VERSION:-0.1.0}
+dmg_path="$project_dir/dist/Limitify-$version.dmg"
 sign_identity=${SIGN_IDENTITY:--}
 dmg_root=$(mktemp -d "${TMPDIR:-/tmp}/limitify-dmg.XXXXXX")
 
