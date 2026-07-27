@@ -59,11 +59,11 @@ struct OpenAIStatusIcon: View {
             forResource: "OpenAIBlossom",
             withExtension: "svg"
         )
-        let resourceURL = Bundle.module.url(
+        let resourceURL = packagedURL ?? Bundle.module.url(
             forResource: "OpenAIBlossom",
             withExtension: "svg"
         )
-        guard let url = packagedURL ?? resourceURL,
+        guard let url = resourceURL,
               let source = NSImage(contentsOf: url)
         else {
             return nil
@@ -128,8 +128,8 @@ struct ProviderStatusIcon: View {
 private enum ProviderIconImage {
     static func load(resource: String, pointSize: NSSize) -> NSImage? {
         let packagedURL = Bundle.main.url(forResource: resource, withExtension: "svg")
-        let resourceURL = Bundle.module.url(forResource: resource, withExtension: "svg")
-        guard let url = packagedURL ?? resourceURL,
+        let resourceURL = packagedURL ?? Bundle.module.url(forResource: resource, withExtension: "svg")
+        guard let url = resourceURL,
               let source = NSImage(contentsOf: url)
         else { return nil }
 
