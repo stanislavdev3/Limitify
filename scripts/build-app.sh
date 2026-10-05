@@ -13,6 +13,13 @@ cd "$project_dir"
 rm -rf "$app_bundle"
 mkdir -p "$contents/MacOS" "$contents/Resources"
 
+# `--show-bin-path` asks the installed toolchain where it actually put the
+# product, rather than assuming the classic per-triple scratch layout — a
+# newer Swift Build engine instead writes under "<scratch>/out/Products/...",
+# and a hardcoded legacy path then silently copies a stale binary left over
+# from whichever build last used that layout.
+resource_bundle_name="Limitify_LimitifyApp.bundle"
+
 if [ "$universal" = "1" ]; then
     arm_scratch="$project_dir/.build-arm64"
     intel_scratch="$project_dir/.build-x86_64"
@@ -22,13 +29,23 @@ if [ "$universal" = "1" ]; then
     swift build -c "$configuration" --product Limitify \
         --triple x86_64-apple-macosx14.0 \
         --scratch-path "$intel_scratch" ${SWIFT_BUILD_FLAGS:-}
-    arm_binary="$arm_scratch/arm64-apple-macosx/$configuration/Limitify"
-    intel_binary="$intel_scratch/x86_64-apple-macosx/$configuration/Limitify"
-    lipo -create "$arm_binary" "$intel_binary" -output "$contents/MacOS/Limitify"
+    arm_bin_dir=$(swift build -c "$configuration" --product Limitify \
+        --triple arm64-apple-macosx14.0 \
+        --scratch-path "$arm_scratch" --show-bin-path ${SWIFT_BUILD_FLAGS:-})
+    intel_bin_dir=$(swift build -c "$configuration" --product Limitify \
+        --triple x86_64-apple-macosx14.0 \
+        --scratch-path "$intel_scratch" --show-bin-path ${SWIFT_BUILD_FLAGS:-})
+    lipo -create "$arm_bin_dir/Limitify" "$intel_bin_dir/Limitify" -output "$contents/MacOS/Limitify"
+    resource_bundle_dir="$arm_bin_dir"
 else
     swift build -c "$configuration" --product Limitify ${SWIFT_BUILD_FLAGS:-}
     binary_dir=$(swift build -c "$configuration" --show-bin-path ${SWIFT_BUILD_FLAGS:-})
     cp "$binary_dir/Limitify" "$contents/MacOS/Limitify"
+    resource_bundle_dir="$binary_dir"
+fi
+
+if [ -d "$resource_bundle_dir/$resource_bundle_name" ]; then
+    cp -R "$resource_bundle_dir/$resource_bundle_name" "$contents/Resources/$resource_bundle_name"
 fi
 
 cp "$project_dir/Resources/Info.plist" "$contents/Info.plist"
