@@ -16,7 +16,10 @@ decodes only the event timestamp, record type, plan label, limit identifiers,
 usage percentages, window durations, and reset timestamps.
 
 Limitify does not read `~/.codex/auth.json`, `~/.codex/history.jsonl`, Codex
-conversation content, or Codex SQLite/log stores.
+conversation content, or Codex SQLite/log stores. The same holds for every
+additional Codex account directory (`~/.codex-<name>` or one added by hand in
+Settings): Limitify only checks that the directory's `auth.json` exists, to
+tell a logged-in account from an empty one, and never reads its contents.
 
 ## App-server source
 

@@ -22,6 +22,12 @@ no UI) and `LimitifyApp` (SwiftUI, settings, installers).
 - Claude profiles = config directories: `~/.claude` always, `~/.claude-*`
   with a `.claude.json` auto-discovered, arbitrary dirs added by the user in
   Settings. Account labels come from `.claude.json` → `oauthAccount`.
+- Codex profiles = `CODEX_HOME` directories, discovered the same way:
+  default (`CODEX_HOME` env or `~/.codex`) always, `~/.codex-*` with an
+  `auth.json` (existence check only) auto-discovered, arbitrary dirs added
+  by the user in Settings. No account label is available from Codex data;
+  the user names additional accounts by hand. See
+  `docs/codex-multi-account.md`.
 - Codex is only spawned after `CodexLaunchGate` confirms Gatekeeper would
   allow it — launching a quarantined binary from a background app makes
   macOS delete it as malware. Never bypass this gate.

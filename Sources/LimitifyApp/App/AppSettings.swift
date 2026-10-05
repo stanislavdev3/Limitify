@@ -16,11 +16,32 @@ enum ProfileTint: String, CaseIterable, Codable {
     case graphite
 }
 
-struct ClaudeProfileCustomization: Codable, Equatable {
+/// Which cross-provider bucket a card's popover row sits under. Grouping is
+/// account-level, not provider-level: a "Work" Claude account and a "Work"
+/// Codex account land in the same section.
+enum ProfileGroup: String, CaseIterable, Codable {
+    case none
+    case work
+    case personal
+
+    var displayName: String {
+        switch self {
+        case .none: "No group"
+        case .work: "Work"
+        case .personal: "Personal"
+        }
+    }
+}
+
+/// Shared by Claude and Codex profiles alike — both need the same knobs to
+/// tell same-provider accounts apart, and neither carries anything
+/// provider-specific.
+struct ProfileCustomization: Codable, Equatable {
     var label: String?
     var tint: ProfileTint = .none
+    var group: ProfileGroup = .none
 
-    var isEmpty: Bool { label == nil && tint == .none }
+    var isEmpty: Bool { label == nil && tint == .none && group == .none }
 
     /// The label is stored exactly as typed — a transforming TextField binding
     /// rewrites the field on every keystroke and breaks the cursor — so
@@ -43,27 +64,37 @@ struct DisplayProvider: Identifiable, Hashable {
     let displayName: String
     let accountLabel: String?
     let tint: ProfileTint
+    let group: ProfileGroup
 
     var id: String { providerID.rawValue }
 
-    static let codex = DisplayProvider(
-        providerID: .codex,
-        kind: .codex,
-        displayName: "Codex",
-        accountLabel: nil,
-        tint: .none
-    )
+    static func codex(
+        _ profile: CodexProfile,
+        customization: ProfileCustomization
+    ) -> DisplayProvider {
+        DisplayProvider(
+            providerID: profile.providerID,
+            kind: .codex,
+            displayName: customization.normalizedLabel ?? profile.displayName,
+            // Codex has no account email to show; the popover badge falls
+            // back to the live usage event's plan type instead.
+            accountLabel: nil,
+            tint: customization.tint,
+            group: customization.group
+        )
+    }
 
     static func claude(
         _ profile: ClaudeProfile,
-        customization: ClaudeProfileCustomization
+        customization: ProfileCustomization
     ) -> DisplayProvider {
         DisplayProvider(
             providerID: profile.providerID,
             kind: .claude,
             displayName: customization.normalizedLabel ?? profile.displayName,
             accountLabel: profile.accountLabel,
-            tint: customization.tint
+            tint: customization.tint,
+            group: customization.group
         )
     }
 }
@@ -79,10 +110,6 @@ final class AppSettings: ObservableObject {
 
     @Published var staleThreshold: TimeInterval {
         didSet { defaults.set(staleThreshold, forKey: Keys.staleThreshold) }
-    }
-
-    @Published var codexSessionsPath: String {
-        didSet { defaults.set(codexSessionsPath, forKey: Keys.codexSessionsPath) }
     }
 
     @Published var codexEnabled: Bool {
@@ -105,23 +132,31 @@ final class AppSettings: ObservableObject {
 
     @Published private(set) var claudeProfiles: [ClaudeProfile]
     @Published private(set) var claudeProfileDirectories: [String]
-    @Published private(set) var claudeProfileCustomizations: [String: ClaudeProfileCustomization]
+    @Published private(set) var claudeProfileCustomizations: [String: ProfileCustomization]
+
+    @Published private(set) var codexProfiles: [CodexProfile]
+    @Published private(set) var codexProfileDirectories: [String]
+    @Published private(set) var codexProfileCustomizations: [String: ProfileCustomization]
 
     private let defaults: UserDefaults
-    private let profileDiscovery: ([URL]) -> [ClaudeProfile]
+    private let claudeProfileDiscovery: ([URL]) -> [ClaudeProfile]
+    private let codexProfileDiscovery: ([URL]) -> [CodexProfile]
 
     init(
         defaults: UserDefaults = .standard,
-        profileDiscovery: @escaping ([URL]) -> [ClaudeProfile] = {
+        claudeProfileDiscovery: @escaping ([URL]) -> [ClaudeProfile] = {
             ClaudeProfileDiscovery.discover(additionalDirectories: $0)
+        },
+        codexProfileDiscovery: @escaping ([URL]) -> [CodexProfile] = {
+            CodexProfileDiscovery.discover(additionalDirectories: $0)
         }
     ) {
         self.defaults = defaults
-        self.profileDiscovery = profileDiscovery
+        self.claudeProfileDiscovery = claudeProfileDiscovery
+        self.codexProfileDiscovery = codexProfileDiscovery
         defaults.register(defaults: [
             Keys.refreshInterval: 60.0,
             Keys.staleThreshold: 600.0,
-            Keys.codexSessionsPath: CodexDataLocation.defaultSessionsDirectory().path,
             Keys.codexEnabled: true,
             Keys.claudeEnabled: true,
             Keys.displayProvider: ProviderID.codex.rawValue,
@@ -137,14 +172,24 @@ final class AppSettings: ObservableObject {
             options: Self.staleThresholdOptions,
             fallback: 600
         )
-        codexSessionsPath = defaults.string(forKey: Keys.codexSessionsPath)
-            ?? CodexDataLocation.defaultSessionsDirectory().path
         codexEnabled = defaults.bool(forKey: Keys.codexEnabled)
         claudeEnabled = defaults.bool(forKey: Keys.claudeEnabled)
-        let directories = defaults.stringArray(forKey: Keys.claudeProfileDirectories) ?? []
-        claudeProfileDirectories = directories
-        claudeProfileCustomizations = Self.loadCustomizations(from: defaults)
-        claudeProfiles = profileDiscovery(directories.map {
+        let claudeDirectories = defaults.stringArray(forKey: Keys.claudeProfileDirectories) ?? []
+        claudeProfileDirectories = claudeDirectories
+        claudeProfileCustomizations = Self.loadCustomizations(
+            from: defaults,
+            key: Keys.claudeProfileCustomizations
+        )
+        claudeProfiles = claudeProfileDiscovery(claudeDirectories.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        })
+        let codexDirectories = defaults.stringArray(forKey: Keys.codexProfileDirectories) ?? []
+        codexProfileDirectories = codexDirectories
+        codexProfileCustomizations = Self.loadCustomizations(
+            from: defaults,
+            key: Keys.codexProfileCustomizations
+        )
+        codexProfiles = codexProfileDiscovery(codexDirectories.map {
             URL(fileURLWithPath: $0, isDirectory: true)
         })
         displayProviderID = ProviderID(
@@ -156,27 +201,42 @@ final class AppSettings: ObservableObject {
     var enabledDisplayProviders: [DisplayProvider] {
         var providers: [DisplayProvider] = []
         if codexEnabled {
-            providers.append(.codex)
+            providers.append(contentsOf: codexProfiles.map {
+                DisplayProvider.codex($0, customization: codexCustomization(for: $0.slug))
+            })
         }
         if claudeEnabled {
             providers.append(contentsOf: claudeProfiles.map {
-                DisplayProvider.claude($0, customization: customization(for: $0.slug))
+                DisplayProvider.claude($0, customization: claudeCustomization(for: $0.slug))
             })
         }
         return providers
     }
 
-    func customization(for slug: String) -> ClaudeProfileCustomization {
-        claudeProfileCustomizations[slug] ?? ClaudeProfileCustomization()
+    func claudeCustomization(for slug: String) -> ProfileCustomization {
+        claudeProfileCustomizations[slug] ?? ProfileCustomization()
     }
 
-    func setCustomization(_ customization: ClaudeProfileCustomization, for slug: String) {
+    func setClaudeCustomization(_ customization: ProfileCustomization, for slug: String) {
         if customization.isEmpty {
             claudeProfileCustomizations.removeValue(forKey: slug)
         } else {
             claudeProfileCustomizations[slug] = customization
         }
-        persistCustomizations()
+        persistCustomizations(claudeProfileCustomizations, key: Keys.claudeProfileCustomizations)
+    }
+
+    func codexCustomization(for slug: String) -> ProfileCustomization {
+        codexProfileCustomizations[slug] ?? ProfileCustomization()
+    }
+
+    func setCodexCustomization(_ customization: ProfileCustomization, for slug: String) {
+        if customization.isEmpty {
+            codexProfileCustomizations.removeValue(forKey: slug)
+        } else {
+            codexProfileCustomizations[slug] = customization
+        }
+        persistCustomizations(codexProfileCustomizations, key: Keys.codexProfileCustomizations)
     }
 
     func addClaudeProfileDirectory(_ url: URL) {
@@ -194,12 +254,27 @@ final class AppSettings: ObservableObject {
         refreshClaudeProfiles()
     }
 
+    func addCodexProfileDirectory(_ url: URL) {
+        let path = url.standardizedFileURL.path
+        guard !codexProfileDirectories.contains(path) else { return }
+        codexProfileDirectories.append(path)
+        defaults.set(codexProfileDirectories, forKey: Keys.codexProfileDirectories)
+        refreshCodexProfiles()
+    }
+
+    func removeCodexProfileDirectory(_ profile: CodexProfile) {
+        let path = profile.homeDirectory.standardizedFileURL.path
+        codexProfileDirectories.removeAll { $0 == path }
+        defaults.set(codexProfileDirectories, forKey: Keys.codexProfileDirectories)
+        refreshCodexProfiles()
+    }
+
     var currentDisplayProvider: DisplayProvider? {
         enabledDisplayProviders.first { $0.providerID == displayProviderID }
     }
 
     func refreshClaudeProfiles() {
-        let discovered = profileDiscovery(claudeProfileDirectories.map {
+        let discovered = claudeProfileDiscovery(claudeProfileDirectories.map {
             URL(fileURLWithPath: $0, isDirectory: true)
         })
         guard discovered != claudeProfiles else { return }
@@ -207,13 +282,13 @@ final class AppSettings: ObservableObject {
         reassignDisplayProviderIfDisabled()
     }
 
-    func resetCodexSessionsPath() {
-        codexSessionsPath = CodexDataLocation.defaultSessionsDirectory().path
-    }
-
-    var expandedCodexSessionsURL: URL {
-        let expanded = NSString(string: codexSessionsPath).expandingTildeInPath
-        return URL(fileURLWithPath: expanded, isDirectory: true)
+    func refreshCodexProfiles() {
+        let discovered = codexProfileDiscovery(codexProfileDirectories.map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        })
+        guard discovered != codexProfiles else { return }
+        codexProfiles = discovered
+        reassignDisplayProviderIfDisabled()
     }
 
     private func reassignDisplayProviderIfDisabled() {
@@ -224,17 +299,18 @@ final class AppSettings: ObservableObject {
         displayProviderID = replacement.providerID
     }
 
-    private func persistCustomizations() {
-        guard let data = try? JSONEncoder().encode(claudeProfileCustomizations) else { return }
-        defaults.set(data, forKey: Keys.claudeProfileCustomizations)
+    private func persistCustomizations(_ customizations: [String: ProfileCustomization], key: String) {
+        guard let data = try? JSONEncoder().encode(customizations) else { return }
+        defaults.set(data, forKey: key)
     }
 
     private static func loadCustomizations(
-        from defaults: UserDefaults
-    ) -> [String: ClaudeProfileCustomization] {
-        guard let data = defaults.data(forKey: Keys.claudeProfileCustomizations),
+        from defaults: UserDefaults,
+        key: String
+    ) -> [String: ProfileCustomization] {
+        guard let data = defaults.data(forKey: key),
               let decoded = try? JSONDecoder().decode(
-                  [String: ClaudeProfileCustomization].self,
+                  [String: ProfileCustomization].self,
                   from: data
               )
         else { return [:] }
@@ -252,11 +328,12 @@ final class AppSettings: ObservableObject {
     private enum Keys {
         static let refreshInterval = "refreshInterval"
         static let staleThreshold = "staleThreshold"
-        static let codexSessionsPath = "codexSessionsPath"
         static let codexEnabled = "codexEnabled"
         static let claudeEnabled = "claudeEnabled"
         static let displayProvider = "displayProvider"
         static let claudeProfileDirectories = "claudeProfileDirectories"
         static let claudeProfileCustomizations = "claudeProfileCustomizations"
+        static let codexProfileDirectories = "codexProfileDirectories"
+        static let codexProfileCustomizations = "codexProfileCustomizations"
     }
 }
