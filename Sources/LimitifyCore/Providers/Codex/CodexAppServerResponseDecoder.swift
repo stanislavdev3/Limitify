@@ -1,7 +1,12 @@
 import Foundation
 
 enum CodexAppServerResponseDecoder {
-    static func decodeUsage(from data: Data, observedAt: Date) throws -> ServiceUsage {
+    static func decodeUsage(
+        from data: Data,
+        observedAt: Date,
+        providerID: ProviderID = .codex,
+        displayName: String = "Codex"
+    ) throws -> ServiceUsage {
         let envelope: RateLimitsResponseEnvelope
         do {
             envelope = try JSONDecoder().decode(RateLimitsResponseEnvelope.self, from: data)
@@ -21,7 +26,7 @@ enum CodexAppServerResponseDecoder {
         if let byID = result.rateLimitsByLimitID, !byID.isEmpty {
             buckets = byID.sorted { $0.key < $1.key }
         } else {
-            let fallbackID = normalized(result.rateLimits.limitID) ?? ProviderID.codex.rawValue
+            let fallbackID = normalized(result.rateLimits.limitID) ?? providerID.rawValue
             buckets = [(fallbackID, result.rateLimits)]
         }
 
@@ -45,8 +50,8 @@ enum CodexAppServerResponseDecoder {
         }
 
         return ServiceUsage(
-            providerID: .codex,
-            displayName: "Codex",
+            providerID: providerID,
+            displayName: displayName,
             accountLabel: accountLabel,
             limits: limits,
             observedAt: observedAt,

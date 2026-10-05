@@ -1,12 +1,17 @@
 public struct CodexUsageProvider: UsageProvider {
-    public let id: ProviderID = .codex
+    public let id: ProviderID
 
     private let preferred: (any UsageProvider)?
     private let fallback: any UsageProvider
 
-    public init(preferred: (any UsageProvider)?, fallback: any UsageProvider) {
+    public init(
+        preferred: (any UsageProvider)?,
+        fallback: any UsageProvider,
+        providerID: ProviderID = .codex
+    ) {
         self.preferred = preferred
         self.fallback = fallback
+        id = providerID
     }
 
     public func fetchUsage() async throws -> ServiceUsage {
