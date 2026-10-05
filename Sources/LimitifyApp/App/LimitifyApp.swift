@@ -26,6 +26,7 @@ struct LimitifyApp: App {
             )
                 .onAppear {
                     settings.refreshClaudeProfiles()
+                    settings.refreshCodexProfiles()
                     claudeHub.sync(with: settings.claudeProfiles)
                     store.start()
                     store.refreshIfNeeded()

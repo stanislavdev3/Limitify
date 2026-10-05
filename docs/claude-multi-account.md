@@ -69,6 +69,9 @@ The label is stored exactly as typed (a transforming TextField binding breaks
 cursor placement); whitespace-only labels are normalized away at display time
 via `normalizedLabel`.
 
+- **Group** — optional Work/Personal bucket shared across providers; see
+  [account-grouping.md](account-grouping.md).
+
 Empty customizations are removed from storage.
 
 ## Selection and fallback

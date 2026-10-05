@@ -69,6 +69,42 @@ struct CodexAppServerSourceTests {
 
         #expect(usage.limits.first?.usedFraction == 0.45)
     }
+
+    @Test("Pins CODEX_HOME and tags the result for a non-default profile")
+    func codexHomeOverrideAndProfileIdentity() async throws {
+        let directory = try TemporaryAppServerDirectory()
+        let executable = directory.url.appending(path: "fake-codex")
+        let envFile = directory.url.appending(path: "codex-home.txt")
+        let response = try String(decoding: fixtureData("app-server-legacy"), as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let script = """
+        #!/bin/sh
+        printf '%s' "$CODEX_HOME" > \(envFile.path)
+        IFS= read -r initialize
+        printf '%s\\n' '{"id":1,"result":{"codexHome":"/tmp/fake-codex"}}'
+        IFS= read -r initialized
+        IFS= read -r request
+        printf '%s\\n' '\(response)'
+        """
+        try Data(script.utf8).write(to: executable)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: executable.path
+        )
+
+        let codexHome = directory.url.appending(path: "profile-home", directoryHint: .isDirectory)
+        let usage = try await CodexAppServerSource(
+            executableURL: executable,
+            responseTimeout: 2,
+            providerID: ProviderID(rawValue: "codex:work"),
+            displayName: "Codex (work)",
+            codexHomeOverride: codexHome
+        ).fetchUsage()
+
+        #expect(usage.providerID == ProviderID(rawValue: "codex:work"))
+        #expect(usage.displayName == "Codex (work)")
+        #expect(try String(contentsOf: envFile, encoding: .utf8) == codexHome.path)
+    }
 }
 
 private func fixtureData(_ name: String) throws -> Data {

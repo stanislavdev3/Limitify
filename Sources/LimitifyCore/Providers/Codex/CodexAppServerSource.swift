@@ -13,27 +13,55 @@ public enum CodexAppServerError: Error, Equatable, Sendable {
 }
 
 public struct CodexAppServerSource: UsageProvider {
-    public let id: ProviderID = .codex
+    public let id: ProviderID
 
     private let executableURL: URL
     private let responseTimeout: TimeInterval
+    private let displayName: String
+    /// Set only for a non-default profile: pins the spawned `codex`
+    /// process to that profile's `CODEX_HOME` so it answers for the right
+    /// account. The default profile leaves this nil and inherits whatever
+    /// `CODEX_HOME` Limitify itself was launched with, preserving today's
+    /// single-account behavior exactly.
+    private let codexHomeOverride: URL?
 
-    public init(executableURL: URL, responseTimeout: TimeInterval = 8) {
+    public init(
+        executableURL: URL,
+        responseTimeout: TimeInterval = 8,
+        providerID: ProviderID = .codex,
+        displayName: String = "Codex",
+        codexHomeOverride: URL? = nil
+    ) {
         self.executableURL = executableURL
         self.responseTimeout = max(0.1, responseTimeout)
+        id = providerID
+        self.displayName = displayName
+        self.codexHomeOverride = codexHomeOverride
     }
 
     public func fetchUsage() async throws -> ServiceUsage {
         let executableURL = executableURL
         let responseTimeout = responseTimeout
+        let providerID = id
+        let displayName = displayName
+        let codexHomeOverride = codexHomeOverride
         return try await Task.detached(priority: .utility) {
-            try Self.loadUsage(executableURL: executableURL, responseTimeout: responseTimeout)
+            try Self.loadUsage(
+                executableURL: executableURL,
+                responseTimeout: responseTimeout,
+                providerID: providerID,
+                displayName: displayName,
+                codexHomeOverride: codexHomeOverride
+            )
         }.value
     }
 
     private static func loadUsage(
         executableURL: URL,
-        responseTimeout: TimeInterval
+        responseTimeout: TimeInterval,
+        providerID: ProviderID,
+        displayName: String,
+        codexHomeOverride: URL?
     ) throws -> ServiceUsage {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw CodexAppServerError.executableUnavailable
@@ -53,6 +81,11 @@ public struct CodexAppServerSource: UsageProvider {
         process.standardInput = input
         process.standardOutput = output
         process.standardError = errors
+        if let codexHomeOverride {
+            var environment = ProcessInfo.processInfo.environment
+            environment["CODEX_HOME"] = codexHomeOverride.path
+            process.environment = environment
+        }
 
         output.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
@@ -100,7 +133,9 @@ public struct CodexAppServerSource: UsageProvider {
 
         return try CodexAppServerResponseDecoder.decodeUsage(
             from: rateLimitData,
-            observedAt: observedAt
+            observedAt: observedAt,
+            providerID: providerID,
+            displayName: displayName
         )
     }
 

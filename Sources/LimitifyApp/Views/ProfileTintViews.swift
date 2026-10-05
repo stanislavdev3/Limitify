@@ -98,3 +98,20 @@ struct ProfileTintPicker: View {
         .contentShape(Circle())
     }
 }
+
+/// Lets a profile opt into the Work/Personal popover sections; grouping is
+/// account-level and cross-provider, so this picker is shared by both Claude
+/// and Codex rows.
+struct ProfileGroupPicker: View {
+    @Binding var selection: ProfileGroup
+
+    var body: some View {
+        Picker("Group", selection: $selection) {
+            ForEach(ProfileGroup.allCases, id: \.self) { group in
+                Text(group.displayName).tag(group)
+            }
+        }
+        .labelsHidden()
+        .frame(maxWidth: 120)
+    }
+}

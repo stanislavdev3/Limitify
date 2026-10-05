@@ -27,23 +27,17 @@ struct SettingsView: View {
             Section("Codex") {
                 Toggle("Enable Codex", isOn: $settings.codexEnabled)
 
-                TextField("Sessions directory", text: $settings.codexSessionsPath)
-                    .textFieldStyle(.roundedBorder)
-                    .disabled(!settings.codexEnabled)
-                    .onSubmit { store.settingsDidChange() }
+                ForEach(settings.codexProfiles) { profile in
+                    codexProfileRow(profile)
+                }
 
                 HStack {
-                    Button("Choose…") { chooseSessionsDirectory() }
+                    Button("Add Account Directory…") { chooseCodexDirectory() }
                         .disabled(!settings.codexEnabled)
-                    Button("Use Default") {
-                        settings.resetCodexSessionsPath()
-                        store.settingsDidChange()
-                    }
-                    .disabled(!settings.codexEnabled)
                     Spacer()
                 }
 
-                Text("Limitify reads only rate-limit events from this sessions directory. It never reads auth.json.")
+                Text("Limitify reads only rate-limit events from each account's sessions directory. It never reads auth.json. Limitify finds ~/.codex-* automatically; add any other CODEX_HOME by hand.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -91,8 +85,13 @@ struct SettingsView: View {
         .onChange(of: settings.claudeEnabled) { _, _ in store.settingsDidChange() }
         .onChange(of: settings.refreshInterval) { _, _ in store.settingsDidChange() }
         .onAppear {
+            // LSUIElement apps aren't activated automatically when a new
+            // window opens, so without this the Settings window can appear
+            // behind whatever app was frontmost before the menu-bar click.
+            NSApplication.shared.activate(ignoringOtherApps: true)
             launchAtLogin.refreshStatus()
             settings.refreshClaudeProfiles()
+            settings.refreshCodexProfiles()
             claudeHub.sync(with: settings.claudeProfiles)
             claudeHub.refreshStatuses()
         }
@@ -104,7 +103,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(settings.customization(for: profile.slug).normalizedLabel ?? profile.displayName)
+                    Text(settings.claudeCustomization(for: profile.slug).normalizedLabel ?? profile.displayName)
                     Text(profile.accountLabel ?? profile.configDirectory.path)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -145,6 +144,7 @@ struct SettingsView: View {
                     .frame(maxWidth: 180)
                     .onSubmit { store.settingsDidChange() }
                 ProfileTintPicker(selection: tintBinding(profile))
+                ProfileGroupPicker(selection: groupBinding(profile))
                 Spacer()
             }
         }
@@ -156,24 +156,117 @@ struct SettingsView: View {
     /// rebuild is deferred to onSubmit and the next popover refresh.
     private func labelBinding(_ profile: ClaudeProfile) -> Binding<String> {
         Binding(
-            get: { settings.customization(for: profile.slug).label ?? "" },
+            get: { settings.claudeCustomization(for: profile.slug).label ?? "" },
             set: { value in
-                var customization = settings.customization(for: profile.slug)
+                var customization = settings.claudeCustomization(for: profile.slug)
                 customization.label = value.isEmpty ? nil : value
-                settings.setCustomization(customization, for: profile.slug)
+                settings.setClaudeCustomization(customization, for: profile.slug)
             }
         )
     }
 
     private func tintBinding(_ profile: ClaudeProfile) -> Binding<ProfileTint> {
         Binding(
-            get: { settings.customization(for: profile.slug).tint },
+            get: { settings.claudeCustomization(for: profile.slug).tint },
             set: { value in
-                var customization = settings.customization(for: profile.slug)
+                var customization = settings.claudeCustomization(for: profile.slug)
                 customization.tint = value
-                settings.setCustomization(customization, for: profile.slug)
+                settings.setClaudeCustomization(customization, for: profile.slug)
             }
         )
+    }
+
+    private func groupBinding(_ profile: ClaudeProfile) -> Binding<ProfileGroup> {
+        Binding(
+            get: { settings.claudeCustomization(for: profile.slug).group },
+            set: { value in
+                var customization = settings.claudeCustomization(for: profile.slug)
+                customization.group = value
+                settings.setClaudeCustomization(customization, for: profile.slug)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func codexProfileRow(_ profile: CodexProfile) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(settings.codexCustomization(for: profile.slug).normalizedLabel ?? profile.displayName)
+                    Text(profile.homeDirectory.path)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if profile.isManual {
+                    Button("Remove") {
+                        settings.removeCodexProfileDirectory(profile)
+                        store.settingsDidChange()
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                TextField("", text: codexLabelBinding(profile), prompt: Text("Custom label"))
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.leading)
+                    .labelsHidden()
+                    .frame(maxWidth: 180)
+                    .onSubmit { store.settingsDidChange() }
+                ProfileTintPicker(selection: codexTintBinding(profile))
+                ProfileGroupPicker(selection: codexGroupBinding(profile))
+                Spacer()
+            }
+        }
+    }
+
+    private func codexLabelBinding(_ profile: CodexProfile) -> Binding<String> {
+        Binding(
+            get: { settings.codexCustomization(for: profile.slug).label ?? "" },
+            set: { value in
+                var customization = settings.codexCustomization(for: profile.slug)
+                customization.label = value.isEmpty ? nil : value
+                settings.setCodexCustomization(customization, for: profile.slug)
+            }
+        )
+    }
+
+    private func codexTintBinding(_ profile: CodexProfile) -> Binding<ProfileTint> {
+        Binding(
+            get: { settings.codexCustomization(for: profile.slug).tint },
+            set: { value in
+                var customization = settings.codexCustomization(for: profile.slug)
+                customization.tint = value
+                settings.setCodexCustomization(customization, for: profile.slug)
+            }
+        )
+    }
+
+    private func codexGroupBinding(_ profile: CodexProfile) -> Binding<ProfileGroup> {
+        Binding(
+            get: { settings.codexCustomization(for: profile.slug).group },
+            set: { value in
+                var customization = settings.codexCustomization(for: profile.slug)
+                customization.group = value
+                settings.setCodexCustomization(customization, for: profile.slug)
+            }
+        )
+    }
+
+    private func chooseCodexDirectory() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose a Codex CODEX_HOME Directory"
+        panel.prompt = "Add"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.showsHiddenFiles = true
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.addCodexProfileDirectory(url)
+            store.settingsDidChange()
+        }
     }
 
     private func chooseClaudeDirectory() {
@@ -193,20 +286,6 @@ struct SettingsView: View {
         }
     }
 
-    private func chooseSessionsDirectory() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose Codex Sessions Directory"
-        panel.prompt = "Choose"
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.directoryURL = settings.expandedCodexSessionsURL
-
-        if panel.runModal() == .OK, let url = panel.url {
-            settings.codexSessionsPath = url.path
-            store.settingsDidChange()
-        }
-    }
 
     private func durationLabel(_ interval: TimeInterval) -> String {
         switch interval {

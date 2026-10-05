@@ -16,7 +16,7 @@ struct UsagePopoverView: View {
             footer
         }
         .padding(16)
-        .frame(width: 360)
+        .frame(width: 400)
     }
 
     private var header: some View {
@@ -30,6 +30,55 @@ struct UsagePopoverView: View {
         }
     }
 
+    /// A fixed point cap (like the earlier 520/700pt constants) either clips
+    /// too much on a small display or shows far fewer cards than it could on
+    /// a large one. Scaling off the screen's visible height — resolved
+    /// directly in this computed property, not through any later state
+    /// update — fits a consistent amount of content across displays while
+    /// still being available in the very first layout pass.
+    private var cardListMaxHeight: CGFloat {
+        let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
+        return min(800, screenHeight * 0.65)
+    }
+
+    /// Letting the ScrollView discover its own content height proved
+    /// unreliable under MenuBarExtra(.window) across several attempts (zero
+    /// height, a flat floor regardless of content, content disappearing
+    /// entirely). Computing an explicit height from data already on hand —
+    /// account count and each account's actual limit-row count — sidesteps
+    /// that layout negotiation altogether: the result may be a little off
+    /// from the true pixel height, but it can't collapse or hide content.
+    private var cardListHeight: CGFloat {
+        let sections = providerSections
+        guard !sections.isEmpty else { return 150 }
+
+        let sectionHeaderHeight: CGFloat = 20
+        let cardChromeHeight: CGFloat = 80 // header row + divider + card padding
+        let limitRowHeight: CGFloat = 60 // name/percent + progress bar + reset text
+        let interRowSpacing: CGFloat = 14 // providerContent's own VStack spacing
+        let itemSpacing: CGFloat = 12 // spacing between cards/headers in the outer list
+
+        var total: CGFloat = 0
+        var itemCount = 0
+
+        for section in sections {
+            if section.title != nil {
+                total += sectionHeaderHeight
+                itemCount += 1
+            }
+            for provider in section.providers {
+                let limitCount = max(1, store.state(for: provider.providerID).usage?.limits.count ?? 1)
+                total += cardChromeHeight
+                    + CGFloat(limitCount) * limitRowHeight
+                    + CGFloat(limitCount - 1) * interRowSpacing
+                itemCount += 1
+            }
+        }
+        total += CGFloat(max(0, itemCount - 1)) * itemSpacing
+
+        return min(max(total, 150), cardListMaxHeight)
+    }
+
     private var content: some View {
         VStack(spacing: 12) {
             if settings.enabledDisplayProviders.isEmpty {
@@ -40,17 +89,50 @@ struct UsagePopoverView: View {
             } else {
                 // Cards must scroll: with several accounts (or extra
                 // model-specific windows) an unbounded stack outgrows the
-                // screen and clips the lower cards and the footer.
+                // screen and clips the lower cards and the footer. The
+                // height is computed explicitly (cardListHeight) rather than
+                // measured from the rendered content — letting the
+                // ScrollView discover its own height has repeatedly proven
+                // unreliable under MenuBarExtra(.window)'s fitting-size
+                // layout (collapsing to zero, sticking at a flat floor
+                // regardless of content, or hiding content outright).
                 ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(settings.enabledDisplayProviders) { provider in
-                            providerBlock(provider)
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(providerSections) { section in
+                            if let title = section.title {
+                                Text(title)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                            ForEach(section.providers) { provider in
+                                providerBlock(provider)
+                            }
                         }
                     }
                 }
                 .scrollBounceBehavior(.basedOnSize)
-                .frame(maxHeight: 520)
+                .frame(height: cardListHeight)
             }
+        }
+    }
+
+    /// Splits cards into Work/Personal/Other sections once the user has
+    /// actually grouped something; otherwise keeps today's flat, header-less
+    /// layout so nobody who hasn't touched grouping sees new chrome.
+    private var providerSections: [ProviderSection] {
+        let providers = settings.enabledDisplayProviders
+        let buckets = Dictionary(grouping: providers, by: \.group)
+        let order: [ProfileGroup] = [.work, .personal, .none]
+        let nonEmpty = order.filter { !(buckets[$0] ?? []).isEmpty }
+
+        guard nonEmpty.count > 1 else {
+            return [ProviderSection(title: nil, providers: providers)]
+        }
+        return nonEmpty.map { group in
+            ProviderSection(
+                title: group == .none ? "Other" : group.displayName,
+                providers: buckets[group] ?? []
+            )
         }
     }
 
@@ -234,9 +316,9 @@ struct UsagePopoverView: View {
 
         switch failure {
         case .providerNotInstalled:
-            return "Install Codex or choose its local sessions directory in Settings."
+            return "Install Codex, then refresh Limitify."
         case .dataDirectoryMissing:
-            return "Choose the Codex sessions directory in Settings."
+            return "This account has no sessions directory yet. Use Codex once, then refresh."
         case .noUsageEvent:
             return "Use Codex once, then refresh Limitify."
         case .accessDenied:
@@ -253,6 +335,13 @@ struct UsagePopoverView: View {
             return "Refresh to read local Codex usage."
         }
     }
+}
+
+private struct ProviderSection: Identifiable {
+    let title: String?
+    let providers: [DisplayProvider]
+
+    var id: String { title ?? "" }
 }
 
 private struct LimitRow: View {

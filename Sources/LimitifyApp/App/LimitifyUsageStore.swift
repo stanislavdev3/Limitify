@@ -105,7 +105,8 @@ final class LimitifyUsageStore: ObservableObject {
     private func applyCurrentSettings() -> Bool {
         let configuration = ProviderConfiguration(
             codexEnabled: settings.codexEnabled,
-            codexSessionsURL: settings.expandedCodexSessionsURL,
+            codexProfiles: settings.codexProfiles,
+            codexCustomizations: settings.codexProfileCustomizations,
             claudeEnabled: settings.claudeEnabled,
             claudeProfiles: settings.claudeProfiles,
             claudeCustomizations: settings.claudeProfileCustomizations
@@ -121,11 +122,9 @@ final class LimitifyUsageStore: ObservableObject {
 
         var providers: [any UsageProvider] = []
         if configuration.codexEnabled {
-            let fallback = CodexSessionJSONLSource(sessionsDirectory: configuration.codexSessionsURL)
-            let preferred = CodexExecutableLocator.locate().map {
-                CodexAppServerSource(executableURL: $0) as any UsageProvider
-            }
-            providers.append(CodexUsageProvider(preferred: preferred, fallback: fallback))
+            providers.append(contentsOf: configuration.codexProfiles.map { profile in
+                codexProvider(for: profile, configuration: configuration)
+            })
         }
         if configuration.claudeEnabled {
             providers.append(contentsOf: configuration.claudeProfiles.map { profile in
@@ -141,12 +140,40 @@ final class LimitifyUsageStore: ObservableObject {
         coordinator = UsageRefreshCoordinator(providers: providers)
         return true
     }
+
+    /// Every profile, default included, is pinned to its own `CODEX_HOME`
+    /// directory — symmetric with how Claude profiles work, and harmless
+    /// for the default profile since that's the same value it would
+    /// otherwise inherit from the ambient environment.
+    private func codexProvider(
+        for profile: CodexProfile,
+        configuration: ProviderConfiguration
+    ) -> CodexUsageProvider {
+        let displayName = configuration.codexCustomizations[profile.slug]?.normalizedLabel
+            ?? profile.displayName
+
+        let fallback = CodexSessionJSONLSource(
+            sessionsDirectory: profile.sessionsDirectory,
+            providerID: profile.providerID,
+            displayName: displayName
+        )
+        let preferred = CodexExecutableLocator.locate().map {
+            CodexAppServerSource(
+                executableURL: $0,
+                providerID: profile.providerID,
+                displayName: displayName,
+                codexHomeOverride: profile.homeDirectory
+            ) as any UsageProvider
+        }
+        return CodexUsageProvider(preferred: preferred, fallback: fallback, providerID: profile.providerID)
+    }
 }
 
 private struct ProviderConfiguration: Equatable {
     let codexEnabled: Bool
-    let codexSessionsURL: URL
+    let codexProfiles: [CodexProfile]
+    let codexCustomizations: [String: ProfileCustomization]
     let claudeEnabled: Bool
     let claudeProfiles: [ClaudeProfile]
-    let claudeCustomizations: [String: ClaudeProfileCustomization]
+    let claudeCustomizations: [String: ProfileCustomization]
 }

@@ -8,23 +8,28 @@ public enum CodexSessionSourceError: Error, Equatable, Sendable {
 }
 
 public struct CodexSessionJSONLSource: UsageProvider {
-    public let id: ProviderID = .codex
+    public let id: ProviderID
 
     private let sessionsDirectory: URL
     private let candidateLimit: Int
     private let initialTailBytes: Int
     private let maximumTailBytes: Int
+    private let displayName: String
 
     public init(
         sessionsDirectory: URL,
         candidateLimit: Int = 8,
         initialTailBytes: Int = 256 * 1_024,
-        maximumTailBytes: Int = 2 * 1_024 * 1_024
+        maximumTailBytes: Int = 2 * 1_024 * 1_024,
+        providerID: ProviderID = .codex,
+        displayName: String = "Codex"
     ) {
         self.sessionsDirectory = sessionsDirectory
         self.candidateLimit = max(1, candidateLimit)
         self.initialTailBytes = max(1, initialTailBytes)
         self.maximumTailBytes = max(self.initialTailBytes, maximumTailBytes)
+        id = providerID
+        self.displayName = displayName
     }
 
     public func fetchUsage() async throws -> ServiceUsage {
@@ -158,11 +163,11 @@ public struct CodexSessionJSONLSource: UsageProvider {
     }
 
     private func map(event: CodexRateLimitEvent) throws -> ServiceUsage {
-        let bucketID = event.limitID.flatMap { $0.isEmpty ? nil : $0 } ?? ProviderID.codex.rawValue
+        let bucketID = event.limitID.flatMap { $0.isEmpty ? nil : $0 } ?? id.rawValue
         let limits = try event.windows.map { window in
             try UsageLimit(
                 id: "\(bucketID).\(window.role.rawValue)",
-                displayName: Self.displayName(for: window),
+                displayName: Self.windowDisplayName(for: window),
                 usedFraction: window.usedPercent / 100,
                 windowDuration: window.windowMinutes.map { TimeInterval($0) * 60 },
                 resetAt: window.resetsAt
@@ -170,8 +175,8 @@ public struct CodexSessionJSONLSource: UsageProvider {
         }
 
         return ServiceUsage(
-            providerID: .codex,
-            displayName: "Codex",
+            providerID: id,
+            displayName: displayName,
             accountLabel: event.planType,
             limits: limits,
             observedAt: event.observedAt,
@@ -179,7 +184,7 @@ public struct CodexSessionJSONLSource: UsageProvider {
         )
     }
 
-    private static func displayName(for window: CodexRateLimitEvent.Window) -> String {
+    private static func windowDisplayName(for window: CodexRateLimitEvent.Window) -> String {
         switch window.windowMinutes {
         case 300:
             return "5-hour limit"
